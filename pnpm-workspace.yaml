@@ -5,3 +5,6 @@ allowBuilds:
   esbuild: true
   protobufjs: false
   ssh2: true
+
+# Refuse to install on a Node without the CVE-2026-111497 (Brotli) fix: see engines in package.json
+engineStrict: true
