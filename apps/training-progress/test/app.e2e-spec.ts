@@ -233,18 +233,23 @@ describe('Training Progress (e2e)', () => {
   describe('training goals', () => {
     const SET_GOAL = `mutation ($input: SetTrainingGoalInput!) { setTrainingGoal(input: $input) { id status target progress } }`;
     const GOALS = `query ($id: ID!) { member(id: $id) { trainingGoals { id status progress achievedAt } } }`;
+    // Goal periods relative to today: a period that has already ended is refused (GoalPeriod).
+    const DAY = 24 * 60 * 60 * 1000;
+    const today = new Date().setUTCHours(0, 0, 0, 0);
+    const daysFromNow = (days: number) => new Date(today + days * DAY);
+    const period = { startsOn: daysFromNow(-30).toISOString(), endsOn: daysFromNow(30).toISOString() };
 
     it('counts workouts already logged when a goal is set, and achieves it when progress reaches the target', async () => {
       const member = 'goals@example.com';
-      await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, distanceMeters: 120000, startedAt: '2026-10-02T08:00:00.000Z' }));
+      await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, distanceMeters: 120000, startedAt: new Date(daysFromNow(-20).getTime() + 8 * 60 * 60 * 1000).toISOString() }));
       await drainOutbox();
 
       const set = await graphql<{ setTrainingGoal: { id: string; status: string; progress: number } }>(SET_GOAL, {
-        input: { memberId: member, metric: 'DISTANCE', target: 200000, discipline: 'CYCLING', startsOn: '2026-10-01T00:00:00Z', endsOn: '2026-11-01T00:00:00Z' },
+        input: { memberId: member, metric: 'DISTANCE', target: 200000, discipline: 'CYCLING', ...period },
       });
       expect(set.data.setTrainingGoal).toMatchObject({ status: 'ACTIVE', progress: 120000 });
 
-      await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, distanceMeters: 90000, startedAt: '2026-10-05T08:00:00.000Z' }));
+      await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, distanceMeters: 90000, startedAt: new Date(daysFromNow(-10).getTime() + 8 * 60 * 60 * 1000).toISOString() }));
       await drainOutbox();
 
       const { data } = await graphql<{ member: { trainingGoals: { status: string; progress: number }[] } }>(GOALS, { id: member });
@@ -256,7 +261,7 @@ describe('Training Progress (e2e)', () => {
       const member = 'set-since@example.com';
       const GOALS_SET_SINCE = `query ($id: ID!, $setSince: DateTime) { member(id: $id) { trainingGoals(setSince: $setSince) { id } } }`;
       const set = await graphql<{ setTrainingGoal: { id: string } }>(SET_GOAL, {
-        input: { memberId: member, metric: 'WORKOUT_COUNT', target: 5, startsOn: '2026-10-01T00:00:00Z', endsOn: '2027-01-01T00:00:00Z' },
+        input: { memberId: member, metric: 'WORKOUT_COUNT', target: 5, ...period },
       });
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const inAnHour = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -270,12 +275,12 @@ describe('Training Progress (e2e)', () => {
 
     it('refuses an invalid goal with INVARIANT_VIOLATION and malformed input with BAD_REQUEST', async () => {
       const invalid = await graphql(SET_GOAL, {
-        input: { memberId: 'goals@example.com', metric: 'DISTANCE', target: 0, startsOn: '2026-10-01T00:00:00Z', endsOn: '2026-11-01T00:00:00Z' },
+        input: { memberId: 'goals@example.com', metric: 'DISTANCE', target: 0, ...period },
       });
       expect(invalid.errors?.[0].extensions.code).toBe('INVARIANT_VIOLATION');
 
       const malformed = await graphql(SET_GOAL, {
-        input: { memberId: 'not-an-email', metric: 'DISTANCE', target: 1, startsOn: '2026-10-01T00:00:00Z', endsOn: '2026-11-01T00:00:00Z' },
+        input: { memberId: 'not-an-email', metric: 'DISTANCE', target: 1, ...period },
       });
       expect(malformed.errors?.[0].extensions.code).toBe('BAD_REQUEST');
     });
@@ -283,7 +288,7 @@ describe('Training Progress (e2e)', () => {
     it("lets only the goal's member abandon an active goal", async () => {
       const ABANDON = `mutation ($input: AbandonTrainingGoalInput!) { abandonTrainingGoal(input: $input) { status } }`;
       const set = await graphql<{ setTrainingGoal: { id: string } }>(SET_GOAL, {
-        input: { memberId: 'abandon@example.com', metric: 'WORKOUT_COUNT', target: 5, startsOn: '2026-10-01T00:00:00Z', endsOn: '2027-01-01T00:00:00Z' },
+        input: { memberId: 'abandon@example.com', metric: 'WORKOUT_COUNT', target: 5, ...period },
       });
       const trainingGoalId = set.data.setTrainingGoal.id;
 
@@ -299,13 +304,14 @@ describe('Training Progress (e2e)', () => {
 
     it('misses active goals once their grace period has ended', async () => {
       await graphql(SET_GOAL, {
-        input: { memberId: 'miss@example.com', metric: 'CALORIES', target: 99999, startsOn: '2026-10-01T00:00:00Z', endsOn: '2026-12-01T00:00:00Z' },
+        input: { memberId: 'miss@example.com', metric: 'CALORIES', target: 99999, ...period },
       });
 
       const missEndedGoals = (now: string) => app.get(CommandBus).execute(new MissEndedGoalsCommand(new Date(now)));
-      expect(await missEndedGoals('2026-12-01T12:00:00Z')).toBe(0);
-      expect(await missEndedGoals('2026-12-02T00:00:01Z')).toBeGreaterThanOrEqual(1);
-      expect(await missEndedGoals('2026-12-02T00:00:01Z')).toBe(0); // a second trigger changes nothing
+      const endsOn = new Date(period.endsOn).getTime();
+      expect(await missEndedGoals(new Date(endsOn + DAY / 2).toISOString())).toBe(0);
+      expect(await missEndedGoals(new Date(endsOn + DAY + 1000).toISOString())).toBeGreaterThanOrEqual(1);
+      expect(await missEndedGoals(new Date(endsOn + DAY + 1000).toISOString())).toBe(0); // a second trigger changes nothing
 
       const { data } = await graphql<{ member: { trainingGoals: { status: string }[] } }>(GOALS, { id: 'miss@example.com' });
       expect(data.member.trainingGoals).toEqual([expect.objectContaining({ status: 'MISSED' })]);
