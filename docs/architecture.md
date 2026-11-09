@@ -77,7 +77,7 @@ The vocabulary used here is defined in [the ubiquitous language](ubiquitous-lang
 
 ## 1. Scope
 
-**In scope:** three NestJS microservices in one Nest CLI monorepo; a separate PostgreSQL instance for each; domain events and integration events through the transactional outbox, with RabbitMQ between the services; Redis caching; Terminus health checks; validation on every boundary; DDD, strategic and tactical. Infrastructure for development (the three PostgreSQL instances, Redis, RabbitMQ, and the Stripe CLI) runs in Docker Compose, and Liquibase, also run from Compose, creates and updates both schemas.
+**In scope:** three NestJS microservices in one Nest CLI monorepo; a separate PostgreSQL instance for each; domain events and integration events through the transactional outbox, with RabbitMQ between the services; Redis caching; Terminus health checks; validation on every boundary; DDD, strategic and tactical. Infrastructure for development (the three PostgreSQL instances, Redis, RabbitMQ, and the Stripe CLI) runs in Docker Compose. Liquibase isn't part of Compose: it runs separately for each of the three service databases and creates and updates their schemas (`scripts/database/liquibase.sh workout-tracking update`, `scripts/database/liquibase.sh training-progress update` and `scripts/database/liquibase.sh billing update`).
 
 **Out of scope for now, on purpose:** authentication and authorization, SQS/SNS, Docker images of the services, Terraform, and monitoring (metrics, tracing, alerting). Where a design decision depends on one of them, this document says so.
 
@@ -1202,7 +1202,7 @@ What members pay for their membership, and what they paid: Billing's own model a
 
 ### 18.2 REST API
 
-URI versioning, no global prefix; health at `/health/...`, admin at `/internal/admin/outbox/...` (`ADMIN_TOKEN`), Stripe's webhook at `/stripe/events`. Until Identity exists the member is in the path, checked with `@IsEmail()`; CORS for `CORS_ORIGINS`, as Training Progress'.
+URI versioning, no global prefix; health at `/health/...`, admin at `/internal/admin/outbox/...` (`ADMIN_TOKEN`), Stripe's webhook at `/stripe/events`. Until Identity exists the member is in the path, checked with `@IsEmail()`; CORS for `CORS_ORIGINS`, as Training Progress'. Because authentication is out of scope, anyone who knows a member's email address could read their membership or open their Billing Portal (change the card, cancel renewal): the `/v1/members/...` routes must not be exposed publicly until Identity exists, and then they take the member from the access token. Only Stripe's webhook, which checks Stripe's signature, may be reachable from outside.
 
 | Method and path | Command or query | Success | Errors |
 |---|---|---|---|

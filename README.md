@@ -84,16 +84,6 @@ curl -X POST localhost:3001/internal/v1/equipment/0199c3a2-0000-7000-8000-000000
 
 In production, set `TELEGRAM_UPDATES=webhook`, `TELEGRAM_WEBHOOK_URL` (the public HTTPS URL of `POST /telegram/updates`) and `TELEGRAM_WEBHOOK_SECRET`: Telegram then posts the updates to any instance. Without a token the bot is off. See section 6.6 of `docs/architecture.md`.
 
-### Postman
-
-`postman/` holds three collections; import them into Postman, or run them with `pnpm dlx newman run <file>`:
-
-- `workout-tracking.postman_collection.json`: the REST API, from registering and pairing equipment to recording, correcting and voiding workouts, with the error cases and the operations routes.
-- `training-progress.postman_collection.json`: the GraphQL API: a member's progress, training log, summaries, personal records and training goals, with the mutations and their domain errors.
-- `billing.postman_collection.json`: the REST API: memberships, checkouts, the billing portal and the ledger, and Stripe's events, signed in a pre-request script (start Billing with `STRIPE_WEBHOOK_SECRET=whsec_postman_local_secret`).
-
-Run the Workout Tracking collection first: its workouts are what Training Progress shows.
-
 ## Tests and checks
 
 ```bash

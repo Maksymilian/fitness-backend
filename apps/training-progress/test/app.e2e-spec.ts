@@ -312,8 +312,8 @@ describe('Training Progress (e2e)', () => {
       const missEndedGoals = (now: string) => app.get(CommandBus).execute(new MissEndedGoalsCommand(new Date(now)));
       const endsOn = new Date(period.endsOn).getTime();
       expect(await missEndedGoals(new Date(endsOn + DAY / 2).toISOString())).toBe(0);
-      expect(await missEndedGoals(new Date(endsOn + DAY + 1000).toISOString())).toBeGreaterThanOrEqual(1);
-      expect(await missEndedGoals(new Date(endsOn + DAY + 1000).toISOString())).toBe(0); // a second trigger changes nothing
+      expect(await missEndedGoals(new Date(endsOn + DAY).toISOString())).toBeGreaterThanOrEqual(1); // the grace period ends at endsOn + 1 day
+      expect(await missEndedGoals(new Date(endsOn + DAY).toISOString())).toBe(0); // a second trigger changes nothing
 
       const { data } = await graphql<{ member: { trainingGoals: { status: string }[] } }>(GOALS, { id: 'miss@example.com' });
       expect(data.member.trainingGoals).toEqual([expect.objectContaining({ status: 'MISSED' })]);
