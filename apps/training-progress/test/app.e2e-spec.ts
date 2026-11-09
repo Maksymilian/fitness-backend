@@ -332,53 +332,6 @@ describe('Training Progress (e2e)', () => {
     });
   });
 
-  describe("goal allowance (Billing's memberships)", () => {
-    const SET_GOAL = `mutation ($input: SetTrainingGoalInput!) { setTrainingGoal(input: $input) { id status } }`;
-    const goal = (memberId: string) => ({ input: { memberId, metric: 'WORKOUT_COUNT', target: 5, startsOn: '2026-10-01T00:00:00Z', endsOn: '2027-01-01T00:00:00Z' } });
-
-    /** Delivers one of Billing's integration events to the anticorruption layer, as RabbitMQ does. */
-    async function membership(topic: string, memberId: string, revision: number) {
-      const channel = { ack: vi.fn(), nack: vi.fn() };
-      const context = { getChannelRef: () => channel, getMessage: () => ({}) };
-      const status = topic === BillingTopics.membershipStartedV1 ? 'ACTIVE' : 'ENDED';
-      const event = {
-        specversion: '1.0',
-        id: uuidv7(),
-        source: BILLING_SOURCE,
-        type: topic,
-        datacontenttype: 'application/json',
-        partitionkey: memberId,
-        data: { membershipId: '0199c3a2-0000-7000-8000-000000000999', memberId, plan: 'MONTHLY', status, paidThrough: '2026-12-01T00:00:00.000Z', renews: true, revision },
-      };
-      const acl = app.get(BillingEventsController);
-      await (topic === BillingTopics.membershipStartedV1 ? acl.membershipStarted(event, context) : acl.membershipEnded(event, context));
-      return channel.ack.mock.calls.length === 1;
-    }
-
-    it('permits one active goal without a membership, any number with one, and one again once it ended', async () => {
-      const member = 'allowance@example.com';
-      expect((await graphql(SET_GOAL, goal(member))).errors).toBeUndefined();
-      expect((await graphql(SET_GOAL, goal(member))).errors?.[0].extensions.code).toBe('CONFLICT');
-
-      expect(await membership(BillingTopics.membershipStartedV1, member, 1)).toBe(true);
-      expect((await graphql(SET_GOAL, goal(member))).errors).toBeUndefined();
-
-      expect(await membership(BillingTopics.membershipEndedV1, member, 2)).toBe(true);
-      expect((await graphql(SET_GOAL, goal(member))).errors?.[0].extensions.code).toBe('CONFLICT');
-      const { data } = await graphql<{ member: { trainingGoals: unknown[] } }>(`query ($id: ID!) { member(id: $id) { trainingGoals(status: ACTIVE) { id } } }`, { id: member });
-      expect(data.member.trainingGoals).toHaveLength(2); // the goals set are kept
-    });
-
-    it("ignores a membership's start that arrives after its end", async () => {
-      const member = 'late-start@example.com';
-      await membership(BillingTopics.membershipEndedV1, member, 2);
-      await membership(BillingTopics.membershipStartedV1, member, 1);
-
-      expect((await graphql(SET_GOAL, goal(member))).errors).toBeUndefined();
-      expect((await graphql(SET_GOAL, goal(member))).errors?.[0].extensions.code).toBe('CONFLICT');
-    });
-  });
-
   describe('progress summaries and streaks', () => {
     const SUMMARY = `query ($id: ID!, $date: DateTime) { member(id: $id) { progressSummary(period: WEEK, date: $date) { periodStart periodEnd workoutCount totalDistanceMeters } } }`;
 

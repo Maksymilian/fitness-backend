@@ -6,6 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
+  "engines": {
+    "node": ">=24.22.1"
+  },
   "scripts": {
     "build": "pnpm check:architecture && nest build workout-tracking && nest build training-progress && nest build billing",
     "check:architecture": "depcruise --config .dependency-cruiser.cjs apps libs",

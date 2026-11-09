@@ -28,7 +28,7 @@ jobs:
           version: 12.10.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: '>=24.22.1 <25' # CVE-2026-111497 (Brotli) is fixed in 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Lint (oxlint and the architecture check)
