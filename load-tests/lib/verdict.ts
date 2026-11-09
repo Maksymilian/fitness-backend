@@ -9,7 +9,7 @@ import encoding from 'k6/encoding';
 import http, { type RefinedResponse } from 'k6/http';
 import { Counter } from 'k6/metrics';
 import type { Threshold } from 'k6/options';
-import { body, type GraphQLResponse, TRAINING_PROGRESS_URL, type TrainingLogPage, type Workout, type WorkoutPage, WORKOUT_TRACKING_URL } from './api.ts';
+import { BILLING_URL, body, type GraphQLResponse, TRAINING_PROGRESS_URL, type TrainingLogPage, type Workout, type WorkoutPage, WORKOUT_TRACKING_URL } from './api.ts';
 import type { Member } from './members.ts';
 
 const GRAFANA_URL = __ENV.GRAFANA_URL || 'http://localhost:3000';
@@ -20,14 +20,18 @@ const RABBITMQ_AUTH = __ENV.RABBITMQ_AUTH || 'fitness:fitness';
 const OUTBOX_ADMIN = {
   'workout-tracking': `${WORKOUT_TRACKING_URL}/internal/v1/admin/outbox`,
   'training-progress': `${TRAINING_PROGRESS_URL}/internal/admin/outbox`,
+  billing: `${BILLING_URL}/internal/admin/outbox`,
 };
 type Service = keyof typeof OUTBOX_ADMIN;
 const ADMIN_TOKENS: Record<Service, string | undefined> = {
   'workout-tracking': __ENV.WORKOUT_TRACKING_ADMIN_TOKEN,
   'training-progress': __ENV.TRAINING_PROGRESS_ADMIN_TOKEN,
+  billing: __ENV.BILLING_ADMIN_TOKEN,
 };
-const BOTH_SERVICES = Object.keys(OUTBOX_ADMIN) as Service[];
-const SERVICES = 'workout-tracking|training-progress';
+const ALL_SERVICES = Object.keys(OUTBOX_ADMIN) as Service[];
+const SERVICES = 'workout-tracking|training-progress|billing';
+/** Billing's membership events, consumed by Training Progress for the goal allowances. */
+const BILLING_QUEUE = 'training-progress.billing';
 export const QUEUE = 'training-progress.workout-tracking';
 const DEAD_LETTER_QUEUE = `${QUEUE}.dlq`;
 
@@ -297,8 +301,10 @@ function messagesLeft(): void {
     for (;;) {
       left = {
         [QUEUE]: queue(QUEUE).messages,
+        [BILLING_QUEUE]: queue(BILLING_QUEUE).messages,
         'workout-tracking outbox': outbox('workout-tracking', 'stats').pending,
         'training-progress outbox': outbox('training-progress', 'stats').pending,
+        'billing outbox': outbox('billing', 'stats').pending,
       };
       if (Object.values(left).every((n) => n === 0) || Date.now() > deadline) {
         break;
@@ -308,7 +314,7 @@ function messagesLeft(): void {
     const count = Object.values(left).reduce((sum, n) => sum + n, 0);
     counters.messagesLeft.add(count);
     if (count === 0) {
-      console.log(`✓ messages: none left in ${QUEUE} or the outboxes`);
+      console.log(`✓ messages: none left in ${QUEUE}, ${BILLING_QUEUE} or the outboxes`);
     } else {
       console.error(`✗ messages left after ${DRAIN_TIMEOUT_S} s: ${JSON.stringify(left)}`);
     }
@@ -394,7 +400,7 @@ export function judge(start: Snapshot, { members, runId, alertsWhen = 'during' }
   const trafficEndedMs = Date.now();
   console.log(`Verdict of run ${runId}, since ${start.since}:`);
   attempt('workouts', () => reconcile(members, runId, start.since));
-  deadLetters(start, BOTH_SERVICES);
+  deadLetters(start, ALL_SERVICES);
   messagesLeft();
   const waitS = Math.ceil((trafficEndedMs + ALERT_WAIT_S * 1000 - Date.now()) / 1000);
   if (waitS > 0) {

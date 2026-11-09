@@ -34,6 +34,15 @@
       "arguments": {}
     },
     {
+      "name": "billing.integration",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
       "name": "training-progress.dlx",
       "vhost": "/",
       "type": "fanout",
@@ -85,6 +94,28 @@
       "arguments": {
         "x-queue-type": "quorum"
       }
+    },
+    {
+      "name": "training-progress.billing",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-single-active-consumer": true,
+        "x-delivery-limit": 5,
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "training-progress.billing.dlq"
+      }
+    },
+    {
+      "name": "training-progress.billing.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
     }
   ],
   "bindings": [
@@ -102,6 +133,14 @@
       "destination": "training-progress.workout-tracking.dlq",
       "destination_type": "queue",
       "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "billing.integration",
+      "vhost": "/",
+      "destination": "training-progress.billing",
+      "destination_type": "queue",
+      "routing_key": "billing.integration.#",
       "arguments": {}
     }
   ]

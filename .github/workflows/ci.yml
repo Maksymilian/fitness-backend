@@ -33,7 +33,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Lint (oxlint and the architecture check)
         run: pnpm lint
-      - name: Build both services
+      - name: Build the three services
         run: pnpm build
       - name: Unit tests, and the lock store's and RabbitMQ transport's contract suites (Testcontainers)
         run: pnpm test
@@ -44,7 +44,7 @@ jobs:
     name: Liquibase changesets and rollbacks
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # The two databases as in compose.yaml, on the same ports: scripts/database targets them by default.
+    # The three databases as in compose.yaml, on the same ports: scripts/database targets them by default.
     services:
       workout-tracking-db:
         image: postgres:18.6-alpine
@@ -66,6 +66,16 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U training_progress -d training_progress"
           --health-interval 2s --health-timeout 3s --health-retries 30
+      billing-db:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_DB: billing
+          POSTGRES_USER: billing
+          POSTGRES_PASSWORD: billing
+        ports: ['5435:5432']
+        options: >-
+          --health-cmd "pg_isready -U billing -d billing"
+          --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
       - uses: actions/checkout@v7
       # Applies every changeset, test records included, rolls them all back, and applies them again.
@@ -73,6 +83,8 @@ jobs:
         run: scripts/database/liquibase.sh workout-tracking update-testing-rollback
       - name: Training Progress' changesets and rollbacks
         run: scripts/database/liquibase.sh training-progress update-testing-rollback
+      - name: Billing's changesets and rollbacks
+        run: scripts/database/liquibase.sh billing update-testing-rollback
 
   scheduler:
     name: Scheduler image

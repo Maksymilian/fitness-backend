@@ -2,13 +2,15 @@ import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } fro
 import { ConfigService } from '@nestjs/config';
 import { type AmqpConnectionManager, connect } from 'amqp-connection-manager';
 import type { ConfirmChannel } from 'amqplib';
+import { BillingSubscription } from '../../training-progress/billing-acl/subscription.js';
 import { WorkoutTrackingSubscription } from '../../training-progress/workout-tracking-acl/subscription.js';
 import type { Environment } from '../config/environment.js';
 import { ScheduleTriggers } from './schedule-triggers.js';
 
 /**
  * Declares where dead letters go, inspected and replayed by hand: the subscription's to the
- * `training-progress.dlx` exchange and the DLQ bound to it, the schedule triggers' to their own DLQ.
+ * `training-progress.dlx` exchange and the DLQ bound to it, the schedule triggers' and Billing's
+ * subscription's to their own DLQs.
  * Declared again on every reconnect, in the background: a broker that is down doesn't stop the
  * service from starting.
  */
@@ -29,6 +31,7 @@ export class DeadLetterTopology implements OnModuleInit, OnApplicationShutdown {
         await channel.assertQueue(deadLetterQueue, { durable: true, arguments: { 'x-queue-type': 'quorum' } });
         await channel.bindQueue(deadLetterQueue, deadLetterExchange, '');
         await channel.assertQueue(ScheduleTriggers.deadLetterQueue, { durable: true, arguments: { 'x-queue-type': 'quorum' } });
+        await channel.assertQueue(BillingSubscription.deadLetterQueue, { durable: true, arguments: { 'x-queue-type': 'quorum' } });
       },
     });
   }

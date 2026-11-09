@@ -55,7 +55,7 @@ In this context, "workout" on its own always means a **logged workout** (as in "
 | **Revise** | Replace a logged workout's metrics. What a correction upstream becomes here. | `LoggedWorkout.revise()`, `LoggedWorkoutRevised` | update, correct, edit |
 | **Stop Counting** | Keep a logged workout but exclude it from everything. What a void upstream becomes here. | `LoggedWorkout.stopCounting()`, `LoggedWorkoutStoppedCounting` | delete, void, remove |
 | **Counts** | A logged workout counts until it stops counting. Only counting workouts contribute to summaries, streaks, personal records and goals. | `LoggedWorkout.counts` | is active, is valid |
-| **Source Revision** | The upstream workout's revision at the time of the last change. A change with an older or equal source revision is ignored. | `SourceRevision` | version, revision |
+| **Source Revision** | The upstream's revision at the time of the last change: a logged workout's from Workout Tracking, a goal allowance's from Billing (the membership's revision). A change with an older or equal source revision is ignored. | `SourceRevision` | version, revision |
 
 ### Progress
 
@@ -96,6 +96,9 @@ In this context, "workout" on its own always means a **logged workout** (as in "
 | **Achieve** | Goal progress reaches the goal target while the goal is active. Happens when goal progress is recorded. **Final**: a later revision or stop-counting doesn't take an achievement back. | `TrainingGoal.recordProgress()`, `GoalAchieved` | complete, finish, win |
 | **Miss** | The grace period ends while the goal is still active. | `TrainingGoal.miss()`, `GoalMissed` | fail, expire |
 | **Abandon** | The goal's member gives up an active goal. | `TrainingGoal.abandon(memberId)`, `GoalAbandoned`, `abandonTrainingGoal` mutation | delete, cancel, remove |
+| **Goal Allowance** | How many active training goals a member may hold at once: **one**, or **any number** while they have a membership in Billing. Checked when a goal is set; a restricted allowance never takes away goals already set. Changed only through the anticorruption layer towards Billing. | `GoalAllowance` aggregate, `GoalAllowance.ensurePermits(activeGoals)`, `GoalAllowanceReached` | quota, plan, tier, subscription, premium |
+| **Extend** | A membership started: the member may hold any number of active goals. | `GoalAllowance.extend()`, `GoalAllowanceExtended`; both arrive as `ChangeGoalAllowanceCommand` | upgrade, unlock |
+| **Restrict** | The membership ended: back to one active goal. | `GoalAllowance.restrict()`, `GoalAllowanceRestricted` | downgrade, lock, cancel |
 
 ### Policies
 
@@ -104,6 +107,34 @@ In this context, "workout" on its own always means a **logged workout** (as in "
 | **Keep Personal Records** | Whenever a workout is logged, revised or stops counting, consider or recalculate the member's personal records in its discipline. | `KeepPersonalRecordsPolicy` |
 | **Check Goal Achievement** | Whenever a workout is logged or revised, or a goal is set, record goal progress on each affected active goal. | `CheckGoalAchievementPolicy` |
 | **Miss Ended Goals** | Every day, on its schedule trigger, miss the active goals whose grace period has ended. | `MissEndedGoalsCommand`, `ScheduleTriggersController` |
+
+## Billing context (supporting subdomain)
+
+What members pay for their membership, and what they paid. Stripe collects the money; Billing keeps its own model of memberships and its own ledger, and translates Stripe's objects in its anticorruption layer. Stripe's words (customer, subscription, invoice, charge) never leave that layer.
+
+| Term | Meaning | Code | Don't say |
+|---|---|---|---|
+| **Payment Provider** | The company that collects members' payments: Stripe, in test mode for development. Billing reaches it only through its anticorruption layer. | `PaymentProvider` port, `StripePaymentProvider`, `stripe-acl/` | gateway, PSP, processor |
+| **Provider Reference** | The payment provider's id of the thing a membership or a ledger entry corresponds to (a Stripe subscription, invoice or refund), kept to recognise it again. Opaque to the model. | `ProviderReference` value object | external id, Stripe id |
+| **Membership** | A member's paid access to the platform, on a membership plan, paid through a date. A member has one membership, active or ended; it starts again after it ended. | `Membership` aggregate, `MembershipId` | subscription, account, plan, license |
+| **Membership Plan** | What a membership costs and how often it's paid: `Monthly` or `Yearly`. The prices live in the payment provider's catalog. | `MembershipPlan` value object | tier, package, product, price |
+| **Membership Status** | `Active` (paid through a date that hasn't passed) or `Ended`. | `MembershipStatus` | state |
+| **Paid Through** | The end of the last period the member paid for. | `Membership.paidThrough` | expiry, valid until, period end |
+| **Renewal** | Whether the membership is paid again when it's paid through. On when it starts; the member turns it off (cancel) or on again (resume). | `Membership.renews` | auto-renew, recurring |
+| **Checkout** | The payment provider's page where a member pays for a membership plan. Paying on it starts the membership. | `StartCheckoutCommand`, `POST /v1/members/:memberId/checkouts` | purchase, buy, order, subscribe |
+| **Billing Portal** | The payment provider's page where a member with a membership switches plans, cancels or resumes renewal, changes their card and reads their invoices. | `OpenBillingPortalCommand`, `POST /v1/members/:memberId/billing-portal` | customer portal, account page, settings |
+| **Start** | The membership begins with its first payment, paid through the end of the first period, with renewal on. A member whose membership ended starts it again the same way. | `Membership.start()`; `membership.renew()` of an ended one; `MembershipStarted` | create, activate, subscribe |
+| **Renew** | A payment for the next period moves paid through forward. | `membership.renew()`, `MembershipRenewed`; Cancel, Resume, Switch Plan and End arrive as `ChangeMembershipCommand` | extend, prolong, update |
+| **Switch Plan** | The member moves to the other membership plan. | `membership.switchPlan()`, `MembershipPlanSwitched` | upgrade, downgrade, change, update |
+| **Cancel** | The member turns renewal off: the membership stays active until it's paid through, then ends. | `membership.cancel()`, `MembershipCancelled` | delete, end, terminate, unsubscribe |
+| **Resume** | The member turns renewal on again before the membership ended. | `membership.resume()`, `MembershipResumed` | reactivate, undo, restore |
+| **End** | The membership stops giving access: renewal was off and it's past paid through, or the payment provider gave up on a renewal payment. | `membership.end()`, `MembershipEnded` | expire, lapse, delete, cancel |
+| **Ledger** | A member's ledger entries, newest first: what they paid and got back. | `Ledger` (read model), `GET /v1/members/:memberId/ledger` | transactions, history, statement |
+| **Ledger Entry** | One movement of money between a member and the platform, as the payment provider reports it: a **Payment** or a **Refund**, with its amount, when it happened, and its provider reference. Never changed: a refund is an entry of its own. | `LedgerEntry` aggregate, `LedgerEntryId`, `LedgerEntryKind` | transaction, record, line, operation |
+| **Payment** | Money a member paid for their membership: a ledger entry, zero or more. | `LedgerEntry.recordPayment()`, `PaymentRecorded` | charge, invoice, transaction |
+| **Refund** | Money given back to a member: a ledger entry, more than zero. | `LedgerEntry.recordRefund()`, `RefundRecorded` | chargeback, reversal, credit |
+| **Money** | An amount in a currency: a decimal (`decimal.js`, never a float) with at most two decimal places, below 100,000,000, and an ISO 4217 currency with two minor units (EUR, PLN, USD, GBP). Stored as `NUMERIC(10,2)` and a currency code. | `Money`, `Currency` value objects | price, cost, value, number |
+| **Apply Payment** | Whenever a payment is recorded, start the member's membership with it, or renew it. | `ApplyPaymentPolicy` | |
 
 ## Notifications context (generic subdomain)
 
@@ -134,12 +165,12 @@ Members read their progress and manage their training goals in a Telegram chat. 
 | **Domain Event** | A business fact that happened inside a context, raised by an aggregate, named in the past tense. Internal to its context. | `libs/ddd` `DomainEvent`; topics `<context>.domain.<event>.v<n>` |
 | **Integration Event** | A fact a context publishes for other contexts, mapped from a domain event into the published language. Versioned. Between services, it travels as a CloudEvent. | Topics `<context>.integration.<event>.v<n>` |
 | **CloudEvent** | An integration event in the CloudEvents 1.0 format, as it travels between services: attributes (`id`, `source`, `type` = the topic, `subject`, `time`, `partitionkey`) around the payload, its `data`. | `cloudevents` SDK `CloudEvent`; `WORKOUT_TRACKING_SOURCE`; `CloudEventSerializer`, `CloudEventDeserializer` |
-| **Published Language** | A context's integration events: topic names and payloads, and the CloudEvents `source` of those that leave the service. Owned by the upstream context. | `libs/workout-tracking-contracts`, `training-progress/published-language/` |
+| **Published Language** | A context's integration events: topic names and payloads, and the CloudEvents `source` of those that leave the service. Owned by the upstream context. | `libs/workout-tracking-contracts`, `libs/billing-contracts`, `training-progress/published-language/` |
 | **Schedule Trigger** | A CloudEvent that a Kubernetes CronJob publishes at a set time to a service's schedule queue, to start time-based work such as Miss Ended Goals. Carries no data; one instance handles it. | `scripts/scheduler/`, `ScheduleTriggers`; types `<context>.schedule.<policy>.v<n>` |
 | **Flow** | One interaction of a member that takes several roundtrips (a session in an app, a conversation with the bot, a Postman run): every trace of it carries the same flow id. OpenTelemetry's `session.id`, carried as W3C Baggage. | `@app/telemetry`: `FLOW_ID`, `inFlow()`, `inRoundtrip()`, `FlowMiddleware`, `MessageFlowInterceptor` |
-| **Interface** | How an interaction reached the platform: GraphQL, the REST API, the Telegram bot, or RabbitMQ (a message no interaction started, such as a schedule trigger). Set where the interaction enters and carried with it like the flow, so every span and log record of it, in each service, says where it came from. | `@app/telemetry`: `INTERFACE` (`interface`), `inInterface()`, `InterfaceMiddleware`; `graphql`, `rest`, `telegram`, `rabbitmq` |
+| **Interface** | How an interaction reached the platform: GraphQL, the REST API, the Telegram bot, Stripe's webhook, or RabbitMQ (a message no interaction started, such as a schedule trigger). Set where the interaction enters and carried with it like the flow, so every span and log record of it, in each service, says where it came from. | `@app/telemetry`: `INTERFACE` (`interface`), `inInterface()`, `InterfaceMiddleware`; `graphql`, `rest`, `telegram`, `stripe`, `rabbitmq` |
 | **Policy** | A reaction to a domain event ("whenever X, then Y") that changes one aggregate per transaction. | `*Policy` |
-| **Anticorruption Layer** | The part of Training Progress that validates Workout Tracking's integration events and translates them into its own language and commands. | `workout-tracking-acl/` |
+| **Anticorruption Layer** | The part of a context that validates another model's messages and translates them into its own language and commands: Training Progress' towards Workout Tracking and Billing, Billing's towards Stripe (its webhook events, and the calls Billing makes to it). | `workout-tracking-acl/`, `billing-acl/`, `stripe-acl/` |
 | **Outbox** | Where a context stores its domain and integration events in the same transaction as the change, until they're delivered. | `@nestjs/outbox`, `nest_outbox.messages` |
 | **Inbox** | Where a consumer records the events it has already applied, so a redelivery changes nothing. | `OutboxInbox`, `nest_outbox.inbox` |
 | **Rate Limit** | The most requests one caller (an IP address) may send to a service in a minute. Past it, the request is rejected with 429 (and `TOO_MANY_REQUESTS` over GraphQL). Off by default: with `RATE_LIMIT=on` (locally), each instance counts; in AWS, a WAF rate-based rule in front of the services does. | `@nestjs/throttler`, `RateLimitGuard`, `RATE_LIMIT`, `RATE_LIMIT_PER_MINUTE`, `rate_limit_rejected_requests_total`; AWS WAF |

@@ -2,7 +2,7 @@
 // to any seeded member, recordings to the writers (members.ts), so the verdict can reconcile them.
 import { check } from 'k6';
 import exec from 'k6/execution';
-import { type Recording, trainingProgress, workoutTracking } from './api.ts';
+import { billing, type Recording, trainingProgress, workoutTracking } from './api.ts';
 import { anyMember, anyWriter, type Discipline, type Member } from './members.ts';
 
 const between = (first: number, last: number) => first + Math.floor(Math.random() * (last - first + 1));
@@ -53,7 +53,7 @@ function setTrainingGoal(member: Member): void {
   });
 }
 
-/** [weight, action]: reads 90, writes 10. */
+/** [weight, action]: reads 95, writes 10. */
 const ACTIONS: [weight: number, action: (runId: string) => void][] = [
   // Reads: REST
   [10, () => {
@@ -75,6 +75,9 @@ const ACTIONS: [weight: number, action: (runId: string) => void][] = [
   }],
   [15, () => trainingProgress.progressSummaries(anyMember())],
   [10, () => trainingProgress.trainingGoals(anyMember())],
+  // Reads: Billing (REST), the membership page
+  [3, () => billing.membership(anyMember())],
+  [2, () => billing.ledger(anyMember())],
   // Writes: a recording (REST, then an integration event to Training Progress), a goal (GraphQL)
   [7, (runId) => recordWorkout(runId)],
   [3, () => setTrainingGoal(anyMember())],

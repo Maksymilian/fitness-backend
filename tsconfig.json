@@ -23,6 +23,12 @@
       "node"
     ],
     "paths": {
+      "@app/billing-contracts": [
+        "./libs/billing-contracts/src/index.ts"
+      ],
+      "@app/billing-contracts/*": [
+        "./libs/billing-contracts/src/*"
+      ],
       "@app/ddd": [
         "./libs/ddd/src/index.ts"
       ],
@@ -50,6 +56,9 @@
     },
     {
       "path": "./apps/training-progress/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/billing/tsconfig.app.json"
     }
   ]
 }

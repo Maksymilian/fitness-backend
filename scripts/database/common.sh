@@ -19,7 +19,8 @@ parse_connection() {
   case "$SERVICE" in
     workout-tracking) local port=5433 ;;
     training-progress) local port=5434 ;;
-    *) die "the first argument is the service: workout-tracking or training-progress" ;;
+    billing) local port=5435 ;;
+    *) die "the first argument is the service: workout-tracking, training-progress or billing" ;;
   esac
   shift
   LOCAL_DATABASE="${SERVICE//-/_}"

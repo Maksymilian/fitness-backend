@@ -9,6 +9,7 @@ import { ProgressSummaryModule } from './training-progress/progress-summary/prog
 import { MembersModule } from './training-progress/members/members.module.js';
 import { WorkoutTrackingAclModule } from './training-progress/workout-tracking-acl/workout-tracking-acl.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { BillingAclModule } from './training-progress/billing-acl/billing-acl.module.js';
 
 /** Composition root of the Training Progress service. */
 @Module({
@@ -21,6 +22,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
     MembersModule,
     WorkoutTrackingAclModule,
     NotificationsModule.forRoot({ templatesDirectory: mailTemplatesDirectory() }),
+    BillingAclModule,
   ],
 })
 export class AppModule {}

@@ -1,4 +1,4 @@
-// The requests the load tests send: Workout Tracking's REST API and Training Progress' GraphQL.
+// The requests the load tests send: Workout Tracking's and Billing's REST APIs, and Training Progress' GraphQL.
 // Every request is tagged with its `name` (one per route or operation, so the summary groups them)
 // and its `interface` (rest or graphql), and checked: 5xx and GraphQL errors are counted on their own.
 import { check } from 'k6';
@@ -9,6 +9,7 @@ import type { Discipline, Member } from './members.ts';
 
 export const WORKOUT_TRACKING_URL = __ENV.WORKOUT_TRACKING_URL || 'http://localhost:3001';
 export const TRAINING_PROGRESS_URL = __ENV.TRAINING_PROGRESS_URL || 'http://localhost:3002';
+export const BILLING_URL = __ENV.BILLING_URL || 'http://localhost:3003';
 
 /** Responses with a 5xx status. */
 export const serverErrors = new Counter('server_errors');
@@ -188,4 +189,12 @@ export const trainingProgress = {
   trainingGoals: (member: Member) => graphql('TrainingGoals', TRAINING_GOALS, { id: member.id }),
   streak: (member: Member) => graphql('Streak', STREAK, { id: member.id }),
   setTrainingGoal: (input: SetTrainingGoalInput) => graphql('SetTrainingGoal', SET_TRAINING_GOAL, { input }),
+};
+
+// --- Billing (REST): a member's membership and ledger, as the member app's membership page reads them
+
+export const billing = {
+  /** The seeded members each have a monthly membership (seed.sh). */
+  membership: (member: Member) => rest('GET', `${BILLING_URL}/v1/members/${member.id}/membership`, null, 'GET /v1/members/:memberId/membership', [200]),
+  ledger: (member: Member) => rest('GET', `${BILLING_URL}/v1/members/${member.id}/ledger?limit=20`, null, 'GET /v1/members/:memberId/ledger', [200]),
 };

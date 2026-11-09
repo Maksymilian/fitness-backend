@@ -10,7 +10,7 @@ import { getRPCMetadata } from '@opentelemetry/core';
  */
 export const INTERFACE = 'interface';
 
-export type InterfaceName = 'graphql' | 'rest' | 'telegram' | 'rabbitmq';
+export type InterfaceName = 'graphql' | 'rest' | 'telegram' | 'stripe' | 'rabbitmq';
 
 /** The interface of the active context, if there is one. */
 export function currentInterface(): string | undefined {

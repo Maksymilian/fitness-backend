@@ -1,4 +1,4 @@
-# Infrastructure only (docs/architecture.md, section 14): the two services run on the host
+# Infrastructure only (docs/architecture.md, section 14): the three services run on the host
 # with `pnpm start:dev:<app>`. `docker compose up -d --wait` starts the databases, Redis and
 # RabbitMQ. Liquibase isn't part of it: scripts/database/liquibase.sh migrates the databases.
 # `--profile observability` adds Grafana Alloy, Loki, Tempo, Prometheus and Grafana (section 15),
@@ -37,6 +37,23 @@ services:
       - training-progress-db:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U training_progress -d training_progress']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # PostgreSQL instance 3: Billing's own database (section 18)
+  billing-db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: billing
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: billing
+    ports:
+      - '5435:5432'
+    volumes:
+      - billing-db:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U billing -d billing']
       interval: 2s
       timeout: 3s
       retries: 30
@@ -86,6 +103,8 @@ services:
       - '127.0.0.1:25434:25434' # training-progress-db
       - '127.0.0.1:26379:26379' # training-progress-redis
       - '127.0.0.1:25673:25673' # training-progress-rabbitmq
+      - '127.0.0.1:25435:25435' # billing-db
+      - '127.0.0.1:25674:25674' # billing-rabbitmq
     volumes:
       - ./infrastructure/toxiproxy/proxies.json:/etc/toxiproxy/proxies.json:ro
     healthcheck:
@@ -93,7 +112,25 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-    depends_on: [workout-tracking-db, training-progress-db, redis, rabbitmq]
+    depends_on: [workout-tracking-db, training-progress-db, billing-db, redis, rabbitmq]
+
+  # The Stripe CLI (section 18.6): forwards the events of Stripe's test mode to Billing on the host,
+  # so no public URL is needed. `docker compose --profile stripe up -d stripe-cli`; it reads
+  # STRIPE_SECRET_KEY (a test key, sk_test_...) from .env. Its webhook signing secret, for Billing's
+  # STRIPE_WEBHOOK_SECRET: `docker compose --profile stripe run --rm stripe-cli listen --print-secret`.
+  stripe-cli:
+    image: stripe/stripe-cli:v1.53.1
+    profiles: [stripe]
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY:-}
+    command:
+      - listen
+      - --forward-to
+      - http://host.docker.internal:3003/stripe/events
+      - --events
+      - invoice.paid,charge.refunded,customer.subscription.updated,customer.subscription.deleted
 
   # Grafana Alloy (section 15): the services' OpenTelemetry (OTLP/HTTP on 4318, only with Basic Auth:
   # infrastructure/alloy/htpasswd, from scripts/observability/telemetry-credentials.sh), RabbitMQ's
@@ -178,6 +215,7 @@ services:
     environment:
       WORKOUT_TRACKING_URL: http://host.docker.internal:3001
       TRAINING_PROGRESS_URL: http://host.docker.internal:3002
+      BILLING_URL: http://host.docker.internal:3003
       GRAFANA_URL: http://grafana:3000
       RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
       K6_PROMETHEUS_RW_SERVER_URL: http://alloy:9091/api/v1/metrics/write
@@ -193,6 +231,7 @@ services:
 volumes:
   workout-tracking-db:
   training-progress-db:
+  billing-db:
   rabbitmq:
   alloy:
   loki:

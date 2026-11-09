@@ -7,7 +7,8 @@ const ANY_DOMAIN = '^apps/[^/]+/src/[^/]+/[^/]+/domain/';
 const ANY_VALUES = '^apps/[^/]+/src/[^/]+/[^/]+/domain/values/';
 
 // Pure libraries the domain may use (generic subdomains), besides libs/ddd.
-const PURE_LIBRARIES = ['date-fns', '@date-fns/utc'];
+// decimal.js: Billing's Money, exact amounts without floats (ADR 2).
+const PURE_LIBRARIES = ['date-fns', '@date-fns/utc', 'decimal.js'];
 
 // The only domain-to-domain imports of another module's root: a factory method on one aggregate
 // that creates another (architecture section 3). Each one needs the user's approval.
@@ -19,7 +20,7 @@ const FACTORIES = [
   },
 ];
 
-const nodeModule = (name) => `(^|/)node_modules/${name.replace('/', '\\/')}/`;
+const nodeModule = (name) => `(^|/)node_modules/${name.replace('/', '\\/').replace('.', '\\.')}/`;
 
 const forbidden = [
   // Bounded contexts
@@ -50,6 +51,20 @@ const forbidden = [
       ],
     },
     to: { path: '^libs/workout-tracking-contracts/' },
+  },
+  {
+    name: 'contracts-only-in-published-language-or-acl',
+    comment: "Billing's contract classes never reach a domain model.",
+    from: {
+      pathNot: [
+        '^libs/billing-contracts/',
+        '^apps/billing/src/billing/published-language/',
+        '^apps/billing/src/platform/outbox/routes\\.ts$',
+        '^apps/training-progress/src/training-progress/billing-acl/',
+        '^apps/[^/]+/test/',
+      ],
+    },
+    to: { path: '^libs/billing-contracts/' },
   },
   {
     name: 'libs-only-through-their-entry-point',

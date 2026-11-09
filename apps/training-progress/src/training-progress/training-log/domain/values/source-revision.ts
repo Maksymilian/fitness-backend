@@ -1,6 +1,6 @@
 import { InvalidSourceRevision } from '../errors/invalid-source-revision.js';
 
-/** The upstream workout's revision at the time of the last change. A change with an older or equal one is ignored. */
+/** The upstream's revision at the time of the last change (a workout's, a membership's). A change with an older or equal one is ignored. */
 export class SourceRevision {
   private constructor(readonly value: number) {}
 

@@ -11,7 +11,7 @@ export abstract class TrainingGoalRepository {
   /** The member's active goals. */
   abstract activeGoalsOf(memberId: MemberId): Promise<TrainingGoal[]>;
 
-  /** Active goals whose grace period ended before `now`. */
+  /** Active goals whose grace period ended at or before `now`. */
   abstract activeGoalsPastGracePeriod(now: Date): Promise<TrainingGoal[]>;
 
   /** @throws ConcurrencyConflict when the goal changed since it was loaded */

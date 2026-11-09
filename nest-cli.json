@@ -10,6 +10,24 @@
   "monorepo": true,
   "root": "apps/workout-tracking",
   "projects": {
+    "billing": {
+      "type": "application",
+      "root": "apps/billing",
+      "entryFile": "main",
+      "sourceRoot": "apps/billing/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/billing/tsconfig.app.json"
+      }
+    },
+    "billing-contracts": {
+      "type": "library",
+      "root": "libs/billing-contracts",
+      "entryFile": "index",
+      "sourceRoot": "libs/billing-contracts/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/billing-contracts/tsconfig.lib.json"
+      }
+    },
     "ddd": {
       "type": "library",
       "root": "libs/ddd",

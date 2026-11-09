@@ -80,6 +80,8 @@ new NodeSDK({
     // Only inside a trace: the outbox relay's polling and Telegram's long polling would each be a trace.
     '@opentelemetry/instrumentation-pg': { requireParentSpan: true },
     '@opentelemetry/instrumentation-redis': { requireParentSpan: true },
-    '@opentelemetry/instrumentation-undici': { requireParentforSpans: true },
+    // Telegram's long polling (getUpdates) waits for updates on purpose: it would be a slow call to
+    // the outgoing-call latency alert. The bot's other calls are measured.
+    '@opentelemetry/instrumentation-undici': { requireParentforSpans: true, ignoreRequestHook: (request) => request.path.includes('/getUpdates') },
   }),
 }).start();

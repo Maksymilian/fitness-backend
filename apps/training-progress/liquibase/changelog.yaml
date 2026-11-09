@@ -13,5 +13,11 @@ databaseChangeLog:
       file: changesets/0003-telegram-chats.sql
       relativeToChangelogFile: true
   - include:
+      file: changesets/0004-goal-allowances.sql
+      relativeToChangelogFile: true
+  - include:
       file: test-data/0001-training-goals.sql
+      relativeToChangelogFile: true
+  - include:
+      file: test-data/0002-goal-allowances.sql
       relativeToChangelogFile: true

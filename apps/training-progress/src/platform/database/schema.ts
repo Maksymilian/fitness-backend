@@ -72,3 +72,15 @@ export const telegramChats = pgTable('telegram_chats', {
   memberId: text('member_id').notNull(),
   signedInAt: timestamp('signed_in_at', { withTimezone: true }).notNull(),
 });
+
+/**
+ * One row per `GoalAllowance` aggregate whose member Billing told us about. No row: one active goal.
+ * `source_revision` is the membership's revision in Billing, against reordering.
+ */
+export const goalAllowances = pgTable('goal_allowances', {
+  memberId: text('member_id').primaryKey(),
+  unlimited: boolean().notNull(),
+  sourceRevision: integer('source_revision').notNull(),
+  changedAt: timestamp('changed_at', { withTimezone: true }).notNull(),
+  version: integer().notNull(),
+});

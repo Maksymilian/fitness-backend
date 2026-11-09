@@ -1,0 +1,13 @@
+# Billing's database (PostgreSQL instance 3). Liquibase owns every DDL statement, the outbox
+# store's schema included. Never edit an applied changeset: add a new one. Changesets with
+# `context:test-data` only run where the context filter includes it (docker compose).
+databaseChangeLog:
+  - include:
+      file: changesets/0001-billing-tables.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changesets/0002-outbox-store.sql
+      relativeToChangelogFile: true
+  - include:
+      file: test-data/0001-memberships.sql
+      relativeToChangelogFile: true

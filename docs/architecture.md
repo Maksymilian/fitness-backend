@@ -2,15 +2,17 @@
 
 ## Architecture
 
-A fitness platform made of two NestJS microservices, designed with DDD. The full design is in [docs/architecture.md](docs/architecture.md), and the vocabulary is in [docs/ubiquitous-language.md](docs/ubiquitous-language.md).
+A fitness platform made of three NestJS microservices, designed with DDD. The full design is in [docs/architecture.md](docs/architecture.md), and the vocabulary is in [docs/ubiquitous-language.md](docs/ubiquitous-language.md).
 
 | Bounded context | Subdomain | Runs in | API | Data |
 |---|---|---|---|---|
 | **Training Progress**: training log, progress summaries, streaks, personal records, training goals | Core | `apps/training-progress` | GraphQL, external | PostgreSQL instance 2, Redis cache |
 | **Workout Tracking**: equipment, pairing, recording, correcting and voiding workouts | Supporting | `apps/workout-tracking` | REST, internal | PostgreSQL instance 1 |
+| **Billing**: memberships, the ledger of payments and refunds, over Stripe | Supporting | `apps/billing` | REST, external; Stripe's webhook | PostgreSQL instance 3 |
 | **Notifications**: mail about achievements, built on `@nestjs/mail` | Generic | a module in `apps/training-progress` | none | none of its own |
 | **Calendar**: training period boundaries, built on `date-fns` | Generic | a value object in Training Progress | none | none |
 | **Identity & Access** | Generic | later: an identity provider | | |
+| **Payments** | Generic | bought: Stripe, behind Billing's anticorruption layer | | |
 
 The services share no database and never call each other. Aggregates raise domain events, which are written to a transactional outbox (`@nestjs/outbox`) in the same transaction as the change. Inside a service, the outbox delivers them to policies that update other aggregates, one aggregate per transaction. Between contexts, only integration events in a published language travel: over RabbitMQ to the other service, and in-process to Notifications. Every consumer applies each event once, through its inbox. Context, aggregate and layer boundaries are checked at build time by `pnpm check:architecture` (dependency-cruiser; rules in section 11.1 of the proposal).
 
@@ -34,24 +36,39 @@ flowchart LR
   subgraph S2["service: training-progress"]
     subgraph TP["Training Progress · Core"]
       TP_ACL["ACL: Workout → Logged Workout"]
+      TP_BACL["ACL: Membership → Goal Allowance"]
       TP_GQL["OHS: GraphQL /graphql"]
       TP_PL["PL: goal-achieved.v1,<br/>personal-record-set.v1"]
     end
     NT["Notifications · Generic<br/>@nestjs/mail"]
   end
 
+  subgraph S3["service: billing"]
+    subgraph BI["Billing · Supporting"]
+      BI_OHS["OHS: REST /v1/members/…"]
+      BI_ACL["ACL: Stripe → Payment, Refund,<br/>Cancel, Resume, Switch Plan, End"]
+      BI_PL["PL: membership-started.v1,<br/>membership-ended.v1"]
+    end
+  end
+  STRIPE["Stripe<br/>(payment provider)"]
+
   EQ -->|"records workouts"| WT_OHS
   BO -->|"pairing, corrections, voids"| WT_OHS
   WT_PL ==>|"U → D · Customer / Supplier<br/>outbox → RabbitMQ"| TP_ACL
+  BI_PL ==>|"U → D · Customer / Supplier<br/>outbox → RabbitMQ"| TP_BACL
   APP -->|"queries, mutations"| TP_GQL
+  APP -->|"membership, checkout, ledger"| BI_OHS
+  STRIPE -->|"webhook events"| BI_ACL
+  BI_ACL -->|"Checkout, Billing Portal"| STRIPE
   TP_PL -->|"U → D · Conformist<br/>outbox, in-process"| NT
   NT -->|"Conformist via a mail transport"| MAIL
   IDP -.->|"Conformist: MemberId"| WT
   IDP -.->|"Conformist: MemberId"| TP
+  IDP -.->|"Conformist: MemberId"| BI
   IDP -.->|"later: member contacts"| NT
 ```
 
-**Legend:** U = upstream, D = downstream, OHS = Open Host Service, PL = Published Language, ACL = Anticorruption Layer. There is no Shared Kernel: `libs/workout-tracking-contracts` holds only Workout Tracking's published language (event payloads and topic names), and `libs/ddd` only technical building blocks, never domain classes.
+**Legend:** U = upstream, D = downstream, OHS = Open Host Service, PL = Published Language, ACL = Anticorruption Layer. There is no Shared Kernel: `libs/workout-tracking-contracts` and `libs/billing-contracts` hold only their context's published language (event payloads and topic names), and `libs/ddd` only technical building blocks, never domain classes.
 
 
 **Status:** implemented, 2026-10-09 (proposed 2026-10-08). Where the implementation settled an open point, this document says so.
@@ -60,7 +77,7 @@ The vocabulary used here is defined in [the ubiquitous language](ubiquitous-lang
 
 ## 1. Scope
 
-**In scope:** two NestJS microservices in one Nest CLI monorepo; a separate PostgreSQL instance for each; domain events and integration events through the transactional outbox, with RabbitMQ between the services; Redis caching; Terminus health checks; validation on every boundary; DDD, strategic and tactical. Infrastructure for development (both PostgreSQL instances, Redis, RabbitMQ) runs in Docker Compose, and Liquibase, also run from Compose, creates and updates both schemas.
+**In scope:** three NestJS microservices in one Nest CLI monorepo; a separate PostgreSQL instance for each; domain events and integration events through the transactional outbox, with RabbitMQ between the services; Redis caching; Terminus health checks; validation on every boundary; DDD, strategic and tactical. Infrastructure for development (the three PostgreSQL instances, Redis, RabbitMQ, and the Stripe CLI) runs in Docker Compose. Liquibase isn't part of Compose: it runs separately for each of the three service databases and creates and updates their schemas (`scripts/database/liquibase.sh workout-tracking update`, `scripts/database/liquibase.sh training-progress update` and `scripts/database/liquibase.sh billing update`).
 
 **Out of scope for now, on purpose:** authentication and authorization, SQS/SNS, Docker images of the services, Terraform, and monitoring (metrics, tracing, alerting). Where a design decision depends on one of them, this document says so.
 
@@ -75,7 +92,7 @@ The vocabulary used here is defined in [the ubiquitous language](ubiquitous-lang
 | **Notifications**: telling members about achievements | **Generic** | Every product sends mail; nothing about it is ours. | **Built now from an off-the-shelf library**: `@nestjs/mail` ([`application/mail.md`](nestjs/application/mail.md)). No domain model, only templates and a reaction to Training Progress' published language. |
 | **Calendar**: ISO weeks, months, years, period boundaries | **Generic** | A solved problem, and an easy one to get subtly wrong. | **Built now from a library**: `date-fns`, used inside the `TrainingPeriod` value object. No hand-written week arithmetic. |
 | **Identity & Access** | **Generic** | A solved problem. | Later: an identity provider (Auth0). Until then `memberId` is passed explicitly and is the member's email address (not verified), and Notifications gets contact addresses through a port with a development adapter. |
-| **Billing & Subscriptions** | **Generic** | A solved problem. | Out of scope. Buy (for example Stripe). |
+| **Billing**: memberships, the ledger of payments and refunds | **Supporting** | Ours: what a membership gives and what members paid, in our own records and language. Was generic until [ADR 2](adr/0002-billing-supporting-subdomain-with-stripe.md). | Built in-house but kept simple (section 18): two small aggregates, money as `decimal.js`, one policy. Collecting the money is **generic and bought**: Stripe, behind an anticorruption layer. |
 
 The effort follows the classification: the core domain gets the full tactical toolset (section 3), the supporting domain a lean version of it, and generic subdomains no domain model at all, only a library behind a port.
 
@@ -85,6 +102,7 @@ The effort follows the classification: the core domain gets the full tactical to
 |---|---|---|---|---|
 | Workout Tracking | Supporting | `apps/workout-tracking` | REST, internal (`/internal/v1/...`) | PostgreSQL instance 1, `workout_tracking` |
 | Training Progress | Core | `apps/training-progress` | GraphQL, external (`/graphql`) | PostgreSQL instance 2, `training_progress`; Redis cache |
+| Billing | Supporting | `apps/billing` | REST, external (`/v1/members/...`); Stripe's webhook (`/stripe/events`) | PostgreSQL instance 3, `billing` |
 | Notifications | Generic | Hosted as a module inside `apps/training-progress` | None | None of its own (its outbox inbox lives in instance 2) |
 
 - Each core or supporting bounded context has its own service and database. No service reads another service's database, and the services never call each other synchronously.
@@ -111,20 +129,35 @@ flowchart LR
   subgraph S2["service: training-progress"]
     subgraph TP["Training Progress · Core"]
       TP_ACL["ACL: Workout → Logged Workout"]
+      TP_BACL["ACL: Membership → Goal Allowance"]
       TP_GQL["OHS: GraphQL /graphql"]
       TP_PL["PL: goal-achieved.v1,<br/>personal-record-set.v1"]
     end
     NT["Notifications · Generic<br/>@nestjs/mail"]
   end
 
+  subgraph S3["service: billing"]
+    subgraph BI["Billing · Supporting"]
+      BI_OHS["OHS: REST /v1/members/…"]
+      BI_ACL["ACL: Stripe → Payment, Refund,<br/>Cancel, Resume, Switch Plan, End"]
+      BI_PL["PL: membership-started.v1,<br/>membership-ended.v1"]
+    end
+  end
+  STRIPE["Stripe<br/>(payment provider)"]
+
   EQ -->|"records workouts"| WT_OHS
   BO -->|"pairing, corrections, voids"| WT_OHS
   WT_PL ==>|"U → D · Customer / Supplier<br/>outbox → RabbitMQ"| TP_ACL
+  BI_PL ==>|"U → D · Customer / Supplier<br/>outbox → RabbitMQ"| TP_BACL
   APP -->|"queries, mutations"| TP_GQL
+  APP -->|"membership, checkout, ledger"| BI_OHS
+  STRIPE -->|"webhook events"| BI_ACL
+  BI_ACL -->|"Checkout, Billing Portal"| STRIPE
   TP_PL -->|"U → D · Conformist<br/>outbox, in-process"| NT
   NT -->|"Conformist via a mail transport"| MAIL
   IDP -.->|"Conformist: MemberId"| WT
   IDP -.->|"Conformist: MemberId"| TP
+  IDP -.->|"Conformist: MemberId"| BI
   IDP -.->|"later: member contacts"| NT
 ```
 
@@ -132,13 +165,16 @@ flowchart LR
 |---|---|---|
 | Workout Tracking | Training Progress | **Customer/Supplier.** Workout Tracking offers an **Open Host Service** with a **Published Language**: versioned integration events whose contracts live in `libs/workout-tracking-contracts`. Training Progress states its needs (for example the `revision` field) and protects its model with an **Anticorruption Layer** that also translates the language: a *correction* upstream becomes *revising* the logged workout downstream, a *void* becomes *stopping counting* it. |
 | Workout Tracking | Connected Equipment, back-office tools | **Open Host Service**: the internal REST API. Equipment firmware conforms to it. |
+| Billing | Training Progress | **Customer/Supplier.** Billing's published language (`libs/billing-contracts`: `membership-started.v1`, `membership-ended.v1`, the whole membership without amounts) over RabbitMQ. Training Progress' **Anticorruption Layer** (`billing-acl/`) translates it into its own concept: a membership that started *extends* the member's **goal allowance**, one that ended *restricts* it; the membership's revision becomes the source revision. |
+| Stripe | Billing | **Anticorruption Layer** (`stripe-acl/`), both ways: Stripe's webhook events become Billing's commands, and Billing's `PaymentProvider` port opens Stripe's hosted Checkout and Billing Portal. Stripe's customers, subscriptions, invoices and charges never leave it (ADR 2). |
 | Training Progress | Notifications | **Conformist** to Training Progress' published language (`goal-achieved.v1`, `personal-record-set.v1`). Notifications is generic and has no model worth protecting, so it doesn't translate; Training Progress still maps its domain events to that language, so its model can change without breaking Notifications. |
 | Mail provider | Notifications | **Conformist**, isolated behind `@nestjs/mail`'s `MailTransport`: switching SMTP for Resend is configuration. |
 | Identity provider (later) | All | **Conformist on identity only**: each context's own `MemberId` value object holds the identity provider's subject id; nothing else of the provider's model is adopted. |
 | Identity provider (later) | Notifications | **Anticorruption Layer**: the `MemberContactDirectory` adapter translates the provider's user profile into a *Member Contact*, so the provider's vocabulary ("user") never reaches Notifications. |
 
-**No Shared Kernel**, on purpose. Two libraries are shared, and neither contains domain concepts:
+**No Shared Kernel**, on purpose. Three libraries are shared, and none contains domain concepts:
 - `libs/workout-tracking-contracts`: Workout Tracking's published language (integration event payloads, topic names and the CloudEvents `source`). Owned by Workout Tracking.
+- `libs/billing-contracts`: Billing's published language, likewise. Owned by Billing.
 - `libs/ddd`: technical building blocks (`AggregateRoot`, `DomainEvent`, `DomainError`). Plain TypeScript.
 
 Training Progress' published language lives in its own app (`training-progress/published-language/`), because its only consumer runs in the same process. It moves to a library when Notifications moves out.
@@ -172,6 +208,18 @@ The big picture as commands, aggregates, domain events and policies ("whenever X
 | Policy: Check Goal Achievement | Record Goal Progress | `TrainingGoal` | `GoalAchieved` | Published as `goal-achieved.v1` → **Notify Goal Achieved** (Notifications) |
 | Member (GraphQL) | Abandon Training Goal | `TrainingGoal` | `GoalAbandoned` | |
 | Schedule trigger (Kubernetes CronJob, daily) | Miss Ended Goals | `TrainingGoal` | `GoalMissed` | |
+| ACL, on `membership-started.v1` / `membership-ended.v1` | Extend / Restrict Goal Allowance | `GoalAllowance` | `GoalAllowanceExtended`, `GoalAllowanceRestricted` | Set a Goal checks it |
+
+**Billing** (section 18)
+
+| Actor or trigger | Command | Aggregate | Domain event | Then |
+|---|---|---|---|---|
+| Member (REST) | Start Checkout, Open Billing Portal | none: Stripe's hosted pages | | The member pays or changes things there; Stripe reports it |
+| ACL, on Stripe's `invoice.paid` | Record Payment | `LedgerEntry` | `PaymentRecorded` | **Apply Payment** |
+| Policy: Apply Payment | Start / Renew Membership | `Membership` | `MembershipStarted`, `MembershipRenewed` | `MembershipStarted` published as `membership-started.v1` |
+| ACL, on `customer.subscription.updated` | Cancel, Resume, Switch Plan | `Membership` | `MembershipCancelled`, `MembershipResumed`, `MembershipPlanSwitched` | |
+| ACL, on `customer.subscription.deleted` | End Membership | `Membership` | `MembershipEnded` | Published as `membership-ended.v1` |
+| ACL, on `charge.refunded` | Record Refund | `LedgerEntry` | `RefundRecorded` | |
 
 ## 3. Tactical design rules
 
@@ -265,7 +313,9 @@ sequenceDiagram
 | `PersonalRecordWithdrawn` | `training-progress.domain.personal-record-withdrawn.v1` | |
 | `TrainingGoalSet` | `training-progress.domain.training-goal-set.v1` | |
 | `GoalAchieved` | | `training-progress.integration.goal-achieved.v1` |
-| `EquipmentRegistered`, `EquipmentPaired`, `EquipmentUnpaired`, `GoalMissed`, `GoalAbandoned` | No subscriber yet, not written | |
+| `PaymentRecorded` (Billing) | `billing.domain.payment-recorded.v1` | |
+| `MembershipStarted`, `MembershipEnded` (Billing) | | `billing.integration.membership-started.v1` (`-ended`) |
+| `EquipmentRegistered`, `EquipmentPaired`, `EquipmentUnpaired`, `GoalMissed`, `GoalAbandoned`, `GoalAllowanceExtended`, `GoalAllowanceRestricted`; Billing's `MembershipRenewed`, `MembershipPlanSwitched`, `MembershipCancelled`, `MembershipResumed`, `RefundRecorded` | No subscriber yet, not written | |
 
 ### 4.2 Topics, transports and keys
 
@@ -310,6 +360,9 @@ The outbox and RabbitMQ deliver **at least once**, so every handler must tolerat
 | Check Goal Achievement | `goal-achievement` | **State guard**: `recordProgress()` only acts on an `Active` goal, so a repeat finds it `Achieved` and records nothing. Each affected goal is its own transaction, which keeps one aggregate per transaction |
 | Notify Personal Record, Notify Goal Achieved | `notifications.*` | Default inbox (skip ids already handled) plus `idempotencyKey: message.id` on the mail, as the mail docs show |
 | Cache invalidation | `cache-invalidation` | `inbox: false`: deleting a key twice is harmless |
+| Billing ACL in Training Progress: Extend / Restrict Goal Allowance | `training-progress.billing` | `processInTransaction()` with the `GoalAllowance`, plus the source revision guard (the membership's revision) against reordering |
+| Billing: Stripe's events (Record Payment, Record Refund, Cancel, Resume, Switch Plan, End) | `webhooks:stripe` | The command's `runOnce()` with the change; `@nestjs/webhooks`' own deduplication is off, so the record commits with the change. Plus state guards in `Membership`, and the unique `(kind, provider_reference)` of ledger entries for an event Stripe sends twice under two ids |
+| Billing: Apply Payment | `apply-payment` | `runOnce()` with the `Membership`; and `renew()` changes nothing for a period already paid |
 
 ## 5. Workout Tracking (supporting subdomain, REST)
 
@@ -430,6 +483,11 @@ The AMQP properties repeat the id (`message_id`) and the type (`type`), for tool
 - `abandon(memberId)` → `GoalAbandoned`. Only while `Active`, and only by the goal's member.
 - Goal progress is never stored: the application layer sums the training log for `progressCriteria()` and passes the result in.
 
+**`GoalAllowance`** (aggregate root, one per member): how many active training goals a member may hold: one, or any number while they have a membership in Billing. Changed only through the anticorruption layer towards Billing (section 18.4).
+- `extend(sourceRevision)` → `GoalAllowanceExtended`; `restrict(sourceRevision)` → `GoalAllowanceRestricted`. A source revision that isn't newer than the stored one changes nothing: an end that overtook its start keeps it restricted.
+- `ensurePermits(activeGoals)` throws `GoalAllowanceReached` (CONFLICT) when one more active goal is too many. Set a Goal counts the member's active goals and asks it, as Check Goal Achievement sums progress for the goal's criteria: the domain decides, the application layer counts. A restricted allowance never takes back goals already set.
+- A member Billing never told about has no row: one active goal.
+
 **Read models** (queries, not aggregates): `TrainingLog`, `ProgressSummary`, `Streak`. Read with SQL, cached where useful (section 8).
 
 **`TrainingPeriod`** (value object) in the `calendar` module: week, month or year boundaries, built on `date-fns` (the generic Calendar subdomain). Used by summaries, streaks and goals.
@@ -458,7 +516,7 @@ Policies are application-layer handlers: they load one aggregate, call one metho
 
 Code first, Apollo driver ([`graphql/quick-start.md`](nestjs/graphql/quick-start.md)). Until authentication exists, the member is chosen with `member(id:)`; later this becomes `me`, with the id taken from the access token.
 
-**Browsers (`configureHttp()`):** every response of both services carries the security headers of `app.useSecurityHeaders()` ([`security/helmet.md`](nestjs/security/helmet.md): Helmet 8's defaults, without the `helmet` package), set first so that error responses and the middleware's own have them too. Outside production, Training Progress' Content Security Policy also allows GraphiQL on `/graphql` (`'unsafe-inline'` scripts and `https://unpkg.com`); in production, GraphiQL is off and the policy is the default. CORS ([`security/cors.md`](nestjs/security/cors.md), `app.enableCors()`, which is Express' `cors` middleware) lets the web apps listed in `CORS_ORIGINS` call GraphQL from a browser: `GET` and `POST`, no cookies, preflights cached for 10 minutes, and `Retry-After` and `X-RateLimit-*` readable by the app. Without `CORS_ORIGINS` (the default), browsers on other origins are blocked. Workout Tracking has no CORS: equipment and services call it, not browsers.
+**Browsers (`configureHttp()`):** every response of the services carries the security headers of `app.useSecurityHeaders()` ([`security/helmet.md`](nestjs/security/helmet.md): Helmet 8's defaults, without the `helmet` package), set first so that error responses and the middleware's own have them too. Outside production, Training Progress' Content Security Policy also allows GraphiQL on `/graphql` (`'unsafe-inline'` scripts and `https://unpkg.com`); in production, GraphiQL is off and the policy is the default. CORS ([`security/cors.md`](nestjs/security/cors.md), `app.enableCors()`, which is Express' `cors` middleware) lets the web apps listed in `CORS_ORIGINS` call GraphQL from a browser: `GET` and `POST`, no cookies, preflights cached for 10 minutes, and `Retry-After` and `X-RateLimit-*` readable by the app. Without `CORS_ORIGINS` (the default), browsers on other origins are blocked. Workout Tracking has no CORS: equipment and services call it, not browsers.
 
 ```graphql
 scalar DateTime
@@ -556,9 +614,10 @@ These types are client representations built from read models and command result
 | `personal_records` | `member_id`, `discipline`, and per record metric its value, logged workout and set-at time (`longest_distance_meters`, `longest_distance_logged_workout_id`, `longest_distance_set_at`, ...), `version` | primary key `(member_id, discipline)`: one row per `PersonalRecords` aggregate |
 | `training_goals` | `id`, `member_id`, `metric`, `target`, `discipline` (nullable), `starts_on`, `ends_on`, `status`, `set_at`, `achieved_at`, `missed_at`, `abandoned_at`, `version` | index `(member_id, status)` |
 | `telegram_chats` | `chat_id`, `member_id`, `signed_in_at` | primary key `chat_id`: one row per signed-in Telegram chat (section 6.6) |
+| `goal_allowances` | `member_id`, `unlimited`, `source_revision` (the membership's revision in Billing), `changed_at`, `version` | primary key `member_id`; changeset 0004 |
 | `nest_outbox.*` | Domain event messages, dead letters and inboxes; created by Liquibase from `nest-outbox sql`, the store runs with `migrate: false` | |
 
-**Migrations:** Liquibase changelogs in `apps/training-progress/liquibase`, run by `scripts/database/liquibase.sh training-progress update`, as for Workout Tracking (section 5.3). Test records: an active goal each for Ada and Grace.
+**Migrations:** Liquibase changelogs in `apps/training-progress/liquibase`, run by `scripts/database/liquibase.sh training-progress update`, as for Workout Tracking (section 5.3). Test records: an active goal each for Ada and Grace, and Ada's unlimited goal allowance (she has a membership in Billing's test records; Grace hasn't).
 
 ### 6.6 Telegram bot (an interface)
 
@@ -601,6 +660,9 @@ Based on [`microservices/rabbitmq.md`](nestjs/microservices/rabbitmq.md) and [`f
 | Queue `training-progress.workout-tracking.dlq` | bound to `training-progress.dlx`; inspected and replayed by hand |
 | Queue `training-progress.schedule` | quorum, durable; schedule triggers, published to it through the default exchange (section 7.5); `x-delivery-limit: 5`; dead-letters through the default exchange to `training-progress.schedule.dlq` |
 | Queue `training-progress.schedule.dlq` | schedule triggers that kept failing: an incident, inspected by hand |
+| Exchange `billing.integration` | topic, durable. Owned by Billing (its published language, section 18.4) |
+| Queue `training-progress.billing` | quorum, durable, bound to `billing.integration.#`; `x-single-active-consumer: true`; `x-delivery-limit: 5`; dead-letters through the default exchange to `training-progress.billing.dlq` |
+| Queue `training-progress.billing.dlq` | Billing's events that kept failing: inspected and replayed by hand |
 
 The topology is declared before any service starts, from `infrastructure/rabbitmq/definitions.json`, which Docker Compose loads into RabbitMQ: an integration event published before Training Progress ever ran would otherwise reach an exchange without a queue, and be lost. The services declare the same objects with the same arguments (Training Progress' RMQ servers assert their queues and the binding, a `DeadLetterTopology` provider the DLX and both DLQs). The exchange lets future consumers bind their own queues without changes to Workout Tracking (the RMQ transport's `exchange`, `exchangeType` and `wildcards` options).
 
@@ -705,6 +767,7 @@ Based on [`reliability/terminus.md`](nestjs/reliability/terminus.md). Every serv
 |---|---|---|
 | Workout Tracking | Its PostgreSQL | RabbitMQ: the outbox keeps the events, so recording still works |
 | Training Progress | Its PostgreSQL | Redis (reads fall back to PostgreSQL); RabbitMQ (queries still work, and consumption resumes when it's back) |
+| Billing | Its PostgreSQL | RabbitMQ: the outbox keeps the membership events. Stripe isn't checked: checkouts fail without it, everything else works |
 
 - PostgreSQL: a custom indicator with `HealthIndicatorService.attempt()` running `select 1`; Terminus has no Drizzle indicator.
 - An instance starts while its PostgreSQL is down: liveness answers `200`, readiness `503` until the database answers. The outbox store (`StartupTolerantPostgresOutboxStore`) skips its startup schema check when `select 1` fails and makes it at its first call; a database that answers with a schema that's behind still fails the startup. When PostgreSQL restarts, the pool's `error` listener (`withPoolErrorsLogged()`) logs each lost idle connection instead of letting it end the process, and the pool reconnects at the next query.
@@ -748,6 +811,7 @@ apps/
       members/                         domain/values/member-id.ts; interface/graphql/member.resolver.ts (the Member root type
                                        and its field resolvers); interface/telegram/ (member-bot-commands.ts, bot-formatting.ts)
       workout-tracking-acl/            RMQ handlers, contract validation, translation into this context's commands
+      billing-acl/                     the same for Billing's membership events: Extend / Restrict Goal Allowance
       published-language/              topics and payloads for Notifications, domain event → integration event mappers
     notifications/                     bounded context (generic): mail classes, templates, handlers,
                                        member-contact-directory (port + development adapter)
@@ -755,10 +819,22 @@ apps/
                                        (incl. the invalidation handler), GraphQL error mapping, health,
                                        messaging/ (the CloudEvents deserializer, the dead-letter topology),
                                        telegram/ (the bot, sign-in, the webhook; section 6.6)
+ billing/src/
+    billing/                           bounded context (supporting, section 18)
+      memberships/                     domain/ (membership.ts, values/: member-id, membership-id, membership-plan, membership-status,
+                                       provider-reference), application/ (apply-payment.policy.ts, commands/, queries/,
+                                       payment-provider.ts: the port), infrastructure/, interface/http/
+      ledger/                          domain/ (ledger-entry.ts, values/: money.ts on decimal.js, currency.ts, ledger-entry-id, -kind),
+                                       application/ (record payment, record refund, the ledger query), infrastructure/, interface/http/
+      stripe-acl/                      Stripe's webhook (verified, translated into commands), the PaymentProvider adapter
+                                       (Checkout, Billing Portal), the price catalog and the member-to-customer map
+      published-language/              membership snapshot mapper, outbox message → CloudEvent
+    platform/                          as Workout Tracking's, plus the webhooks' verification metric
 libs/
   ddd/                                 AggregateRoot, DomainEvent, DomainError, ConcurrencyConflict, Transaction, generateId
                                        (technical, no domain concepts)
   workout-tracking-contracts/          Workout Tracking's published language: topics, exchange, CloudEvents source and payload classes
+  billing-contracts/                   Billing's published language: the same, for the membership snapshot
   telemetry/                           OpenTelemetry (section 15): instrumentation.ts (the SDK, loaded with node --import), flows,
                                        the staged trace of outbox messages, the logger, the count of @nestjs/resilience's
                                        events (technical, no domain concepts)
@@ -767,10 +843,11 @@ infrastructure/{tempo,prometheus}/     Their configuration (Loki uses its image'
 infrastructure/grafana/                Provisioned data sources, dashboards and alert rules (section 15.4)
 infrastructure/rabbitmq/               definitions.json (user, exchanges, queues, bindings of section 7.2), rabbitmq.conf
 infrastructure/toxiproxy/              proxies.json: one Toxiproxy proxy per connection of a service (section 16.3)
-postman/                               workout-tracking (REST) and training-progress (GraphQL) collections
-compose.yaml                           PostgreSQL x2, Redis, RabbitMQ; profiles observability (section 15) and faults (Toxiproxy)
+postman/                               workout-tracking (REST), training-progress (GraphQL) and billing (REST) collections
+compose.yaml                           PostgreSQL x3, Redis, RabbitMQ; profiles observability (section 15), faults (Toxiproxy), stripe (the Stripe CLI)
 scripts/database/                      Liquibase in Docker: update, tag and roll back one service's database
 scripts/scheduler/                     The scheduler image: publishes one schedule trigger and exits (section 7.5)
+scripts/stripe/                        seed-catalog.mjs: Billing's product, prices and Billing Portal in a Stripe sandbox (section 18.6)
 scripts/observability/                 Telemetry credentials (Basic Auth for Alloy)
 scripts/faults/                        Start a service through Toxiproxy; inject and clear faults (section 16.3)
 rspack.config.js                       Builds each service's instrumentation.js next to its main.js
@@ -779,7 +856,7 @@ rspack.config.js                       Builds each service's instrumentation.js 
 Each app also has `liquibase/` (its schema), `test/` (e2e on a Testcontainers PostgreSQL with the changesets) and `.env.example`.
 
 Layer rules (enforced by the architecture check, section 11.1):
-- `domain/` imports nothing from NestJS, Drizzle, `@nestjs/outbox` or other layers. Pure libraries for generic subdomains (`date-fns`, `@date-fns/utc`) and `libs/ddd` are allowed. Aggregates are unit-tested without Nest.
+- `domain/` imports nothing from NestJS, Drizzle, `@nestjs/outbox` or other layers. Pure libraries (`date-fns`, `@date-fns/utc`, and `decimal.js` for Billing's `Money`) and `libs/ddd` are allowed. Aggregates are unit-tested without Nest.
 - `application/` holds command and query handlers, policies, and read ports (such as the training log totals). Repository ports belong to `domain/`. The application layer opens transactions, through `platform/`'s `Transactions` (`run()`, and `runOnce()` with the inbox), and stages events through `platform/`'s `DomainEventPublisher` port.
 - `infrastructure/` implements the ports with Drizzle and the outbox, and maps rows to aggregates.
 - `interface/` (controllers, resolvers, message handlers) validates input, dispatches a command or query, and maps the result.
@@ -792,10 +869,10 @@ Context, aggregate and layer boundaries are enforced in code, not only in diagra
 |---|---|---|
 | `no-import-from-another-service` | Any import from `apps/A/` into `apps/B/` | Each core or supporting context is its own service |
 | `context-sees-other-contexts-only-through-published-language` | Inside one app, a context folder importing another context folder, except its `published-language/`. `platform/` and the composition root (`app.module.ts`) may import every context | Notifications sees only Training Progress' published language |
-| `contracts-only-in-published-language-or-acl` | Importing `libs/workout-tracking-contracts` anywhere except Workout Tracking's `published-language/`, Training Progress' `workout-tracking-acl/` and the e2e tests | Contract classes never reach a domain model |
+| `contracts-only-in-published-language-or-acl` | Importing `libs/workout-tracking-contracts` anywhere except Workout Tracking's `published-language/`, Training Progress' `workout-tracking-acl/` and the e2e tests; `libs/billing-contracts` anywhere except Billing's `published-language/` and route table, Training Progress' `billing-acl/` and the e2e tests | Contract classes never reach a domain model |
 | `libs-only-through-their-entry-point` | Deep imports such as `@app/ddd/aggregate-root.js`; only `@app/<lib>` (its `src/index.ts`) | Libraries have a public API. The Nest library schematic also adds an `@app/<lib>/*` alias, which this rule neutralizes |
 | `libs-import-no-app-and-no-other-lib` | `libs/*` importing `apps/*` or another lib | No domain classes in `libs/` |
-| `domain-depends-only-on-domain-libs-ddd-and-pure-libraries` | `domain/` importing anything except `domain/` folders (as limited below), `libs/ddd`, and an allow-list of pure libraries (`date-fns`, `@date-fns/utc`) | Domain is framework-free: no NestJS, Drizzle, `@nestjs/outbox`, contracts, `application/`, `infrastructure/`, `interface/` or `platform/`. An allow-list, so a new package is rejected until it's added on purpose |
+| `domain-depends-only-on-domain-libs-ddd-and-pure-libraries` | `domain/` importing anything except `domain/` folders (as limited below), `libs/ddd`, and an allow-list of pure libraries (`date-fns`, `@date-fns/utc`, `decimal.js`) | Domain is framework-free: no NestJS, Drizzle, `@nestjs/outbox`, contracts, `application/`, `infrastructure/`, `interface/` or `platform/`. An allow-list, so a new package is rejected until it's added on purpose |
 | `application-imports-no-infrastructure-or-interface` | `application/` importing `infrastructure/` or `interface/` | Dependencies point inward |
 | `infrastructure-imports-no-interface` | `infrastructure/` importing `interface/` | Dependencies point inward |
 | `domain-sees-other-modules-only-through-values` | A module's `domain/` importing another module's `domain/` outside `domain/values/` | Strict aggregate isolation: roots, entities, repositories, events and errors stay private; other aggregates are referenced by id |
@@ -832,6 +909,8 @@ What isn't restricted, on purpose: `application/` and `interface/` may import ot
 | Timeouts | `@nestjs/resilience` ([`reliability/resilience.md`](nestjs/reliability/resilience.md)) | Official package: `@Timeout()` on entrypoints, mapped to 504 and GraphQL's `TIMEOUT`, and events on diagnostics channels that `@app/telemetry` counts. Retries, circuit breakers and bulkheads come with it (section 16.5) |
 | Load tests (local) | [k6](https://grafana.com/docs/k6/) 2.3, Compose's `k6` service (`load-tests/k6.sh`), its metrics through Alloy to Prometheus, Grafana Labs' k6 Prometheus dashboard | The Nest docs have no recipe. Scripted in JavaScript, open and closed workload models (arrival rates for spikes), thresholds that fail the run; nothing to install. Prometheus remote write rather than InfluxDB, which k6's older dashboards read: no fourth store (section 17) |
 | Fault injection (local) | [Toxiproxy](https://github.com/Shopify/toxiproxy) in Compose | The Nest docs have no recipe. A TCP proxy per connection, driven by an API: latency, a dependency that stops answering or is down, without touching the services' code |
+| Payments (generic, bought) | Stripe, with its official SDK (`stripe` 23, API `2026-09-30.endive`), behind Billing's anticorruption layer; its hosted Checkout and Billing Portal; the Stripe CLI in Compose for webhooks in development | The Nest docs have no payments recipe; `@nestjs/webhooks` verifies Stripe's signature scheme natively (`scheme: 'stripe'`). No card data reaches the platform (ADR 2) |
+| Money | `decimal.js` in the domain, `NUMERIC(10,2)` in PostgreSQL | Exact amounts, never floats; two-decimal currencies only, so every amount fits the column (ADR 2) |
 | Validation | `class-validator`, `class-transformer` | Official recipe |
 | Configuration | `@nestjs/config` | Official recipe |
 | Observability | OpenTelemetry SDK for Node.js (`@app/telemetry`); Grafana Alloy (OTLP with Basic Auth, RabbitMQ and Redis scraping), Tempo, Loki, Prometheus and Grafana | The OpenTelemetry standard: the services know no vendor, and the stack is open source and runs in Compose. `@nestjs/observe` ([`observability/`](nestjs/observability/overview.md)) is NestJS' own platform, with its own protocol and `x-request-id` propagation |
@@ -839,7 +918,7 @@ What isn't restricted, on purpose: `application/` and `interface/` may import ot
 | Architecture check | `dependency-cruiser`, run with pnpm | The Nest docs have no recipe for import boundaries. It checks the resolved import graph (including `.js` → `.ts` under `nodenext` and the `@app/*` aliases), and its rules compose, which oxlint's overrides don't (section 11.1) |
 | Tests | Vitest with SWC (`unplugin-swc`, [`recipes/swc.md`](nestjs/recipes/swc.md)), Testcontainers (`@testcontainers/postgresql`, `@testcontainers/redis`, `@testcontainers/rabbitmq`) | Aggregate tests as given/when/then on domain events; ACL, cache and filter tests; e2e tests per service on a real PostgreSQL in Docker with the Liquibase changesets, the relay driven with `runOnce()`, as in the outbox docs' Testing section. A container per e2e file, the same images as compose.yaml: no emulator to diverge from production. The lock store's and the RabbitMQ transport's contract suites (`pnpm test`) run the same way, each against its own container |
 | Build | Nest CLI monorepo with Rspack (the monorepo default) | One bundle per service in `dist/apps/<service>/main.js`; mail templates copied as CLI assets |
-| API collections | Postman: `postman/workout-tracking.postman_collection.json` (REST), `postman/training-progress.postman_collection.json` (GraphQL) | Every request checks its status code; both run green with newman against the Compose setup |
+| API collections | Postman: `postman/workout-tracking.postman_collection.json` (REST), `postman/training-progress.postman_collection.json` (GraphQL), `postman/billing.postman_collection.json` (REST; Stripe's events signed in a pre-request script) | Every request checks its status code; they run green with newman against the Compose setup |
 
 ## 13. Implementation plan (done)
 
@@ -868,10 +947,11 @@ Every building block is generated with the Nest CLI (see `CLAUDE.md`). Each mile
 | 6 | Member contacts | **Decided:** until Identity exists, a member id is the member's email address, not verified; Notifications' development adapter sends to it |
 | 7 | Publisher confirms | **Settled:** Nest's RMQ client waits for publisher confirms (section 7.1) |
 | 8 | Template leftovers | **Done:** `@nestjs/observe`, `@nestjs/mau` and the `GET /` controller are gone |
+| 9 | Billing | **Decided** (ADR 2): a supporting context of its own over Stripe. Plans Monthly 9.99 EUR and Yearly 99.90 EUR (the seeded catalog); a lapsed membership turns off unlimited training goals |
 
 ## 15. Observability
 
-Both services speak OpenTelemetry only; the Grafana stack stores, presents and alerts on it. Everything runs in Docker Compose's `observability` profile.
+The services speak OpenTelemetry only; the Grafana stack stores, presents and alerts on it. Everything runs in Docker Compose's `observability` profile.
 
 ```
 service --OTLP/HTTP + Basic Auth--> Grafana Alloy --traces--> Tempo ----span metrics, service graph--+
@@ -913,7 +993,7 @@ Only Alloy's OTLP port (and its UI) and Grafana are published, on 127.0.0.1; Lok
 Grafana (`http://localhost:3000`, `admin` and `GRAFANA_ADMIN_PASSWORD` from `.env`) gets everything from `infrastructure/grafana/`, provisioned: change it there, not in Grafana.
 
 - **Data sources**, linked both ways: a log's `trace_id` opens its trace in Tempo, a span opens its logs in Loki, Tempo's service map reads Prometheus.
-- **Fitness platform** dashboard (`env`, `service`, `version`, `interface` and `flow` variables): the alert rules' state; HTTP requests per minute by service (and version) and endpoint, 5xx errors and p95 duration by version, the busiest endpoints; GraphQL operations per minute by type and root fields, failures by error code and p95 duration; latency at p95 and p99: HTTP requests by service, GraphQL operations, database operations by operation, outgoing HTTP calls by host, message handling (Tempo's span metrics, the 10 slowest consumer and internal spans), calls between services (Tempo's service graph), Redis commands and garbage collection pauses; rate-limited requests by handler, timeouts by entrypoint, rejected and failed responses, and requests waiting for a database connection, with the faults of section 16 as annotations; the read cache's reads by result, loads from PostgreSQL and database operations per second, with the load tests of section 17 as annotations; Tempo's service graph and recent traces; a flow's traces and logs; database duration and connections, event loop delay and utilization, heap; RabbitMQ dead letters, messages, ready and unacknowledged, acknowledgements per minute and consumers per queue, node memory; Redis up, memory and maxmemory, hit ratio, commands per second, clients, evictions and expirations; the error and warning logs of the services, RabbitMQ and Redis.
+- **Fitness platform** dashboard (`env`, `service`, `version`, `interface` and `flow` variables): the alert rules' state; **a row per service** (repeated on the `service` variable, so Workout Tracking, Training Progress and Billing each have their own): requests per minute by version, 4xx and 5xx by status, HTTP and database p95 and p99; **Billing**: Stripe's events by type and outcome, webhooks refused by their signature check, Billing's integration events published by topic, Stripe API calls p95 and p99; HTTP requests per minute by service (and version) and endpoint, 5xx errors and p95 duration by version, the busiest endpoints; GraphQL operations per minute by type and root fields, failures by error code and p95 duration; latency at p95 and p99: HTTP requests by service, GraphQL operations, database operations by operation, outgoing HTTP calls by host, message handling (Tempo's span metrics, the 10 slowest consumer and internal spans), calls between services (Tempo's service graph), Redis commands and garbage collection pauses; rate-limited requests by handler, timeouts by entrypoint, rejected and failed responses, and requests waiting for a database connection, with the faults of section 16 as annotations; the read cache's reads by result, loads from PostgreSQL and database operations per second, with the load tests of section 17 as annotations; Tempo's service graph and recent traces; a flow's traces and logs; database duration and connections, event loop delay and utilization, heap; RabbitMQ dead letters, messages, ready and unacknowledged, acknowledgements per minute and consumers per queue, node memory; Redis up, memory and maxmemory, hit ratio, commands per second, clients, evictions and expirations; the error and warning logs of the services, RabbitMQ and Redis.
 - **k6 Prometheus** dashboard: Grafana Labs' own for k6 ([19665](https://grafana.com/grafana/dashboards/19665-k6-prometheus/), revision 3), changed only for provisioning (a fixed uid, `k6-prometheus`, the Prometheus data source by default, the links, the load tests' annotations). A load test's side of the run, by **Test ID** (`testid`, which `load-tests/k6.sh` sets to `<test>-<UTC time>`): virtual users, request rate and failures, latency by statistic (p95, p99, min, max, average, median) and by request name, checks. The two dashboards link to each other.
 - **Alert rules** (`provisioning/alerting/alert-rules.yaml`), evaluated every minute on Prometheus:
 
@@ -936,6 +1016,8 @@ Grafana (`http://localhost:3000`, `admin` and `GRAFANA_ADMIN_PASSWORD` from `.en
 | Database operation duration p95 over 500 ms | The same on `db_client_operation_duration_seconds_bucket`, by service and operation | Over 500 ms for 5 minutes, with at least 20 statements |
 | Outgoing HTTP calls p95 over 5 seconds | The same on `http_client_request_duration_seconds_bucket`, by service and host | Over 5 s for 5 minutes, with at least 10 calls |
 | Message handling p95 over 5 seconds | The same on Tempo's `traces_spanmetrics_latency_bucket{span_kind="SPAN_KIND_CONSUMER"}`, by service and span | Over 5 s for 5 minutes, with at least 10 messages |
+| Stripe events failing | `increase(billing_stripe_events_total{outcome="failed"}[5m])` by service and event type | Any in 5 minutes: Stripe sends them again, but a 422 fails again (section 18.5) |
+| Webhooks failing their signature check | `increase(webhooks_verification_failures_total[5m])` by service, receiver and reason | Any in 5 minutes: a signing secret that doesn't match, or someone posting to the route |
 
 The latency rules alert on p95, not p99: with little traffic, p99 is a handful of requests and jumps around. The dashboard shows both. Each rule needs a minimum number of observations in the window, so a few slow requests on an idle service don't fire it. The reasoning is in [ADR 1](adr/0001-latency-alerts-on-p95-p99-on-dashboard.md).
 
@@ -943,7 +1025,7 @@ The rules notify Grafana's default contact point; add one (Slack, e-mail with SM
 
 ## 16. Rate limit, timeouts and faults
 
-Both services limit how many requests one caller sends, and how long a query may take. Locally, Toxiproxy slows down or cuts any connection of a service to its PostgreSQL, Redis or RabbitMQ, so both, and every other failure, can be triggered on purpose and watched in Grafana (section 15).
+The services limit how many requests one caller sends, and how long a query may take. Locally, Toxiproxy slows down or cuts any connection of a service to its PostgreSQL, Redis or RabbitMQ, so both, and every other failure, can be triggered on purpose and watched in Grafana (section 15).
 
 ### 16.1 Rate limit
 
@@ -980,6 +1062,8 @@ Compose's `faults` profile runs [Toxiproxy](https://github.com/Shopify/toxiproxy
 | `training-progress-db` | 25434 | `training-progress-db:5432` |
 | `training-progress-redis` | 26379 | `redis:6379` |
 | `training-progress-rabbitmq` | 25673 | `rabbitmq:5672` |
+| `billing-db` | 25435 | `billing-db:5432` |
+| `billing-rabbitmq` | 25674 | `rabbitmq:5672` |
 
 - `docker compose --profile faults up -d --wait` starts it; its API and the proxies listen on 127.0.0.1 only.
 - `scripts/faults/start-through-toxiproxy.sh <service>` starts the service like `pnpm start:dev:<service>`, with the URLs of its `.env` on the proxies' ports (the shell's variables win over `.env`). Stop the usual `start:dev` first: two watchers would build into the same `dist/`.
@@ -1018,8 +1102,8 @@ A load test is passed when the platform answers fast enough **and** leaves nothi
 
 - **k6 2.3 in Compose** (`grafana/k6:2.3.0`, the `k6` service, profile `load-tests`), which `load-tests/k6.sh <test>` runs with `docker compose run`: nothing to install. The tests are TypeScript (`load-tests/<test>.ts`, their helpers in `load-tests/lib/`): k6 runs them as they are, stripping the types, and `pnpm typecheck` checks them against k6's API (`load-tests/tsconfig.json`, `@types/k6` at the image's version). On the Compose network, it reaches Grafana, RabbitMQ's management API and Alloy by name, and the services, which run on the host, through `host.docker.internal` (`host-gateway`). The script reads the admin tokens from the services' `.env`, Grafana's password from `.env` and RabbitMQ's user from Workout Tracking's `RABBITMQ_URL`; extra arguments go to `k6 run` (`-e PEAK_RATE=150`). It exits with k6's code: 0 when every threshold passed, 99 when one failed. Each run is a region annotation on the dashboards (tag `load-test`, purple), and its reports go to `var/load-tests/<test id>/`: k6's web dashboard as `dashboard.html` (`K6_WEB_DASHBOARD`, `K6_WEB_DASHBOARD_EXPORT`; k6 skips it for a run shorter than a few of its 10-second periods, and `K6_WEB_DASHBOARD=false` turns it off), every data point as `metrics.json` (`--out json`), the end-of-test summary as `summary.json`, and what the run printed, the verdict included, as `console.log`.
 - **k6's metrics in Grafana:** k6 writes them with its Prometheus remote write output (`experimental-prometheus-rw`, built in) to Alloy, every 5 seconds, which forwards them to Prometheus (section 15.3). Each run is tagged `testid=<test>-<UTC time>` (`TEST_ID`, which also starts its recording ids and names its reports' folder), and its trends are written as the statistics the **k6 Prometheus** dashboard reads (`K6_PROMETHEUS_RW_TREND_STATS`: p95, p99, min, max, average, median). Stale markers end the series with the run. Pick the run in the dashboard's **Test ID**; the **Fitness platform** dashboard shows the services meanwhile.
-- **The members:** `load-tests/seed.sh` writes them into both databases: `load-0001@example.com` to `load-1000@example.com`, each with a paired bike, treadmill or rower and a workout a day for the last year; the first 20 (the hot ones) two a day for 1,500 days, a long streak to compute. About 420,000 workouts per database, recorded in Workout Tracking and logged in Training Progress with the same ids, as if their events had been delivered. The ids are the md5 of a name written as a UUID, which `load-tests/lib/members.ts` computes too, so a test knows a member's equipment without asking. Running it again changes nothing; `--remove` deletes the members' rows and cached read models; `--members`, `--days`, `--hot` and `--hot-days` change the volume (`--days 1825`: about 1.8 million). Volume for load tests and query plans, not test records, so it isn't a changeset.
-- Both services running (`pnpm start:prod:<service>` measures the build rather than the watch mode), and the `observability` profile: the verdict reads Grafana.
+- **The members:** `load-tests/seed.sh` writes them into the three databases: `load-0001@example.com` to `load-1000@example.com`, each with a paired bike, treadmill or rower and a workout a day for the last year; the first 20 (the hot ones) two a day for 1,500 days, a long streak to compute. About 420,000 workouts per database, recorded in Workout Tracking and logged in Training Progress with the same ids, as if their events had been delivered. The ids are the md5 of a name written as a UUID, which `load-tests/lib/members.ts` computes too, so a test knows a member's equipment without asking. Running it again changes nothing; `--remove` deletes the members' rows and cached read models; `--members`, `--days`, `--hot` and `--hot-days` change the volume (`--days 1825`: about 1.8 million). Each also has a monthly membership in Billing with a year of payments, and the unlimited goal allowance it gives in Training Progress, so the load tests' goals never hit the allowance. Volume for load tests and query plans, not test records, so it isn't a changeset.
+- The three services running (`pnpm start:prod:<service>` measures the build rather than the watch mode), and the `observability` profile: the verdict reads Grafana.
 
 ### 17.2 The tests
 
@@ -1033,7 +1117,7 @@ A load test is passed when the platform answers fast enough **and** leaves nothi
 
 `P95_MS` changes the limit. The rates are open (`ramping-arrival-rate`): new requests keep arriving at the set rate however slow the answers get, as members' apps do, so a slow service shows as latency, not as fewer requests. An action is one request, or two (a list, then one of its items).
 
-The usual traffic (`load-tests/lib/traffic.ts`) picks one action per iteration, by weight: 90 reads, 10 writes.
+The usual traffic (`load-tests/lib/traffic.ts`) picks one action per iteration, by weight: 95 reads, 10 writes.
 
 | Weight | Interface | Action |
 |---|---|---|
@@ -1044,6 +1128,8 @@ The usual traffic (`load-tests/lib/traffic.ts`) picks one action per iteration, 
 | 15 | GraphQL | `TrainingLog`, and its second page 3 times in 10 |
 | 15 | GraphQL | `ProgressSummaries`: this week, month and year |
 | 10 | GraphQL | `TrainingGoals`, each with its progress (one query per goal, section 6.4) |
+| 3 | REST | Billing: a member's membership |
+| 2 | REST | Billing: a member's ledger, 20 entries |
 | 7 | REST | Record a workout started now. One time in 10, the previous recording again instead, which must return the same workout (200) |
 | 3 | GraphQL | `setTrainingGoal` for this month and the next |
 
@@ -1061,10 +1147,10 @@ Every criterion is a k6 threshold; one that fails fails the run. The verdict run
 | No GraphQL error | `graphql_errors` 0 | Errors in a response, even a 200, by code |
 | No lost event | `lost_workouts` 0 | Every workout recorded in the run (its recording id starts with the run's id) is, within `RECONCILE_TIMEOUT_S` (120), in its member's training log in Training Progress |
 | No duplicated event | `duplicated_workouts` 0 | No recording made two workouts, and no workout is logged twice |
-| No dead letter | `dead_letters` 0 | Both outboxes' dead letters that failed since the start (the admin routes), and RabbitMQ's DLQ, against its count at the start |
-| Nothing stuck | `messages_left` 0 | Training Progress' queue and both outboxes empty, within `DRAIN_TIMEOUT_S` (30) |
-| No exception | `error_traces` 0 | Tempo: `{ resource.service.name =~ "workout-tracking\|training-progress" && status = error }` since the start. A failed handler, query or publish, a 5xx, an error log: each marks its span |
-| No error log | `error_logs` 0 | Loki: `{service_name=~"workout-tracking\|training-progress"} \| detected_level=~"(?i)error\|fatal"` since the start |
+| No dead letter | `dead_letters` 0 | The three outboxes' dead letters that failed since the start (the admin routes), and RabbitMQ's DLQ, against its count at the start |
+| Nothing stuck | `messages_left` 0 | Training Progress' two queues and the three outboxes empty, within `DRAIN_TIMEOUT_S` (30) |
+| No exception | `error_traces` 0 | Tempo: `{ resource.service.name =~ "workout-tracking\|training-progress\|billing" && status = error }` since the start. A failed handler, query or publish, a 5xx, an error log: each marks its span |
+| No error log | `error_logs` 0 | Loki: `{service_name=~"workout-tracking\|training-progress\|billing"} \| detected_level=~"(?i)error\|fatal"` since the start |
 | Quiet alerts | `alerts_fired` 0 | Grafana's alert history since the start (`/api/annotations?type=alert`), 75 s (`ALERT_WAIT_S`) after the traffic, so that an evaluation sees its end. Not counted: the two request-rate rules (over 20 a minute), which a load test fires on purpose, and rules only pending, listed instead |
 | The verdict ran | `checks_unavailable` 0 | A check that couldn't run (Grafana down, no admin token) fails the run instead of passing it |
 
@@ -1095,3 +1181,76 @@ Between steps 2 and 4, events published after `...v2` was bound are in both queu
 
 - **Several instances** behind a local load balancer (nginx or Traefik in Compose), and `service.instance.id`: today two instances of one version share their metrics' series. The tests then target the balancer (`WORKOUT_TRACKING_URL`, `TRAINING_PROGRESS_URL`), and a rolling deploy can run under `stress`.
 - **The p95 by route in the verdict**, from the summary's tagged requests: today the summary has it per interface, Grafana per route.
+
+## 18. Billing (supporting subdomain, REST, over Stripe)
+
+What members pay for their membership, and what they paid: Billing's own model and ledger, with Stripe collecting the money. Why it's a supporting context of its own, and the alternatives, are in [ADR 2](adr/0002-billing-supporting-subdomain-with-stripe.md); the terms in the glossary's *Billing context*.
+
+### 18.1 Domain model
+
+**`Membership`** (aggregate root, one per member, unique `member_id`): `MembershipId`, `MemberId`, `MembershipPlan` (`Monthly`, `Yearly`), `MembershipStatus` (`Active`, `Ended`), `paidThrough`, `renews`, `ProviderReference` (Stripe's subscription), `startedAt`, `endedAt`, `revision`.
+- One per member is the invariant "a member has one membership at a time": a second subscription paid while one is active fails with `PaymentForAnotherMembership`, an incident (one payment is refunded by hand).
+- `Membership.start(payment)` → `MembershipStarted`. `renew(payment)` → `MembershipRenewed` when it moves paid through forward; on an ended membership it starts it again (`MembershipStarted`, the new plan and provider reference); a payment it's paid through already changes nothing.
+- `switchPlan(plan)` → `MembershipPlanSwitched`, `cancel()` → `MembershipCancelled` (renewal off, still active), `resume()` → `MembershipResumed`, `end()` → `MembershipEnded`. Each takes the provider reference, and changes nothing for an older membership of the member, after the end, or when it's so already: Stripe's events can be applied twice, or late.
+- `revision` is its optimistic lock, and the order of its events downstream.
+
+**`LedgerEntry`** (aggregate root, one per payment or refund): `LedgerEntryId`, `MemberId`, `LedgerEntryKind`, `Money`, `occurredAt`, `ProviderReference` (Stripe's invoice; for a refund, the charge and its refunded total), what a payment paid for (plan, paid through, the membership's provider reference). `LedgerEntry.recordPayment()` → `PaymentRecorded` (zero or more), `recordRefund()` → `RefundRecorded` (more than zero). Never changed, so no version column: nothing can change one concurrently. `(kind, provider_reference)` is unique.
+
+**`Money`** (value object): a `decimal.js` decimal and a `Currency`; at most the currency's two decimal places, below 100,000,000, so it fits `NUMERIC(10,2)` exactly; `Money.ofMinorUnits(999, EUR)` is 9.99 EUR, as Stripe sends amounts. Currencies: EUR, PLN, USD, GBP (two minor units each; a three-decimal currency wouldn't fit the column).
+
+**Policy: Apply Payment** (`apply-payment`): on `billing.domain.payment-recorded.v1`, start or renew the member's membership, one aggregate per transaction. Recording the payment and changing the membership are two transactions, as the rules require.
+
+### 18.2 REST API
+
+URI versioning, no global prefix; health at `/health/...`, admin at `/internal/admin/outbox/...` (`ADMIN_TOKEN`), Stripe's webhook at `/stripe/events`. Until Identity exists the member is in the path, checked with `@IsEmail()`; CORS for `CORS_ORIGINS`, as Training Progress'. Because authentication is out of scope, anyone who knows a member's email address could read their membership or open their Billing Portal (change the card, cancel renewal): the `/v1/members/...` routes must not be exposed publicly until Identity exists, and then they take the member from the access token. Only Stripe's webhook, which checks Stripe's signature, may be reachable from outside.
+
+| Method and path | Command or query | Success | Errors |
+|---|---|---|---|
+| `GET /v1/members/:memberId/membership` | Membership | `200` | `404` |
+| `POST /v1/members/:memberId/checkouts` `{ plan }` | Start Checkout | `201 { url }`: Stripe Checkout | `409` an active membership, `503` without `STRIPE_SECRET_KEY` |
+| `POST /v1/members/:memberId/billing-portal` | Open Billing Portal | `200 { url }`: Stripe's Billing Portal | `404` never a member, `503` |
+| `GET /v1/members/:memberId/ledger?limit=&cursor=` | Ledger, newest first, keyset pagination | `200`; amounts as text (`"9.99"`) | |
+| `POST /stripe/events` | Stripe's events (18.5) | `200` | `401` signature, `404`/`409` retried by Stripe, `422` never valid |
+
+Checkout puts the member id and plan into the subscription's metadata, which Stripe copies onto every invoice: that's how the anticorruption layer finds the member. Starting a checkout changes nothing in Billing: the membership starts when Stripe reports the payment.
+
+### 18.3 Persistence (PostgreSQL instance 3)
+
+| Table | Columns | Constraints and indexes |
+|---|---|---|
+| `memberships` | `id`, `member_id`, `plan`, `status`, `paid_through`, `renews`, `provider_reference`, `started_at`, `ended_at`, `revision` | unique `member_id` |
+| `ledger_entries` | `id`, `member_id`, `kind`, `amount` `NUMERIC(10,2)`, `currency` `char(3)`, `occurred_at`, `provider_reference`, `plan`, `paid_through`, `membership_reference`, `recorded_at` | unique `(kind, provider_reference)`; index `(member_id, occurred_at desc, id desc)`; `amount >= 0` |
+| `provider_customers` | `member_id`, `customer_reference` (Stripe's `cus_...`), `recorded_at` | the anticorruption layer's map, not the model: refunds find their member, the next checkout and the portal reuse the customer |
+| `nest_outbox.*` | Changeset 0002, from `nest-outbox sql` | |
+
+**Migrations:** `apps/billing/liquibase`, `scripts/database/liquibase.sh billing update` (port 5435). Test records: Ada's monthly membership and one payment of 9.99 EUR; Grace has none.
+
+### 18.4 Published language and Training Progress
+
+`libs/billing-contracts`: `billing.integration.membership-started.v1` and `-ended.v1`, CloudEvents from source `/billing` (the CloudEvents attributes of section 5.4), keyed by member, carrying `MembershipSnapshotV1` (membership id, member id, plan, status, paid through, renewal, revision; no amounts). The other membership events have no subscriber, so they aren't written. Training Progress' `billing-acl/` consumes `training-progress.billing` (section 7.2) in a third RMQ listener and translates: started → *Extend* the goal allowance, ended → *Restrict* it, the revision → the source revision. Nothing calls Billing synchronously, and Billing calls nothing but Stripe. Workout Tracking doesn't need Billing.
+
+### 18.5 Stripe's events: the anticorruption layer
+
+`@nestjs/webhooks` verifies `Stripe-Signature` on the raw body (`rawBody: true`, `scheme: 'stripe'`, 5 minutes' tolerance), then `StripeEventTranslator` translates:
+
+| Stripe event | Billing's command | Notes |
+|---|---|---|
+| `invoice.paid` | Record Payment | Only invoices whose subscription metadata names a member. The plan comes from the line's price (the price catalog, by lookup key), not from the metadata, which a plan switch doesn't change; paid through is the lines' latest period end |
+| `charge.refunded` | Record Refund | What this event refunded: `amount_refunded` minus the previous one; the member through `provider_customers` |
+| `customer.subscription.updated` | Cancel, Resume, Switch Plan | From `previous_attributes`: `cancel_at_period_end` or `cancel_at` changed, or the items' lookup key; anything else is ignored |
+| `customer.subscription.deleted` | End | Stripe ends a subscription after its paid period when renewal is off, or after its retries of a renewal payment gave up |
+
+- **Exactly once:** each command runs in `runOnce('webhooks:stripe', event.id)`: the inbox record commits with the change. A resent event changes nothing; one event with two changes gets an id per change.
+- **Out of order:** the state guards of `Membership`; a change for a membership that hasn't started yet is refused (404), and Stripe sends it again. The Stripe CLI doesn't retry: `stripe events resend <id>`.
+- **Failures:** a `422` (an unknown currency, a malformed event) fails again however often it's sent: the error log and the *Stripe events failing* alert. Stripe retries anything but a 2xx for 3 days.
+- **Metrics:** `billing_stripe_events_total` by `stripe_event_type` and `outcome` (`applied`, `ignored`, `duplicate`, `failed`), `webhooks_verification_failures_total` by receiver and reason; Stripe's API calls are the outgoing HTTP metrics (host `api.stripe.com`). Interface `stripe` on every span and log of an event.
+
+### 18.6 Development with Stripe's test mode
+
+1. A Stripe sandbox; its test secret key (`sk_test_...`) in `apps/billing/.env` as `STRIPE_SECRET_KEY`, and in the root `.env` for the Stripe CLI. A live key is refused outside production.
+2. `pnpm stripe:seed-catalog`: the membership product, its prices (`membership-monthly` 9.99 EUR, `membership-yearly` 99.90 EUR; `CURRENCY`, `MONTHLY`, `YEARLY` change them) and the Billing Portal's configuration. Running it again changes nothing.
+3. `docker compose --profile stripe run --rm stripe-cli listen --print-secret` prints the CLI's signing secret: `STRIPE_WEBHOOK_SECRET`. Then `docker compose --profile stripe up -d stripe-cli` forwards the four events to `http://host.docker.internal:3003/stripe/events`.
+4. `pnpm start:dev:billing`, `POST /v1/members/<email>/checkouts`, and pay on the page it returns with the test card 4242 4242 4242 4242. The membership starts, Training Progress extends the goal allowance. `docker compose --profile stripe run --rm stripe-cli trigger invoice.paid` sends events without the checkout (they carry no member, so Billing ignores them); test clocks run renewals and failed payments.
+
+Without a key, checkouts and the portal answer 503 and everything else works; without a signing secret, the webhook route doesn't exist. The tests and load tests never call Stripe: they sign events with `signWebhook()` (`@nestjs/webhooks/testing`) and replace the `PaymentProvider`.
+

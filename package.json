@@ -1,7 +1,7 @@
 {
-  "name": "nest-js-migration",
+  "name": "fitness-backend",
   "version": "0.0.1",
-  "description": "Fitness platform: Workout Tracking and Training Progress, two NestJS microservices designed with DDD",
+  "description": "Fitness platform: Workout Tracking, Training Progress and Billing, three NestJS microservices designed with DDD",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -10,17 +10,19 @@
     "node": ">=24.22.1"
   },
   "scripts": {
-    "build": "pnpm check:architecture && nest build workout-tracking && nest build training-progress",
+    "build": "pnpm check:architecture && nest build workout-tracking && nest build training-progress && nest build billing",
     "check:architecture": "depcruise --config .dependency-cruiser.cjs apps libs",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "lint": "oxlint --type-aware apps/ libs/ && pnpm typecheck && pnpm check:architecture",
-    "typecheck": "tsc --noEmit -p libs/ddd/tsconfig.lib.json && tsc --noEmit -p libs/telemetry/tsconfig.lib.json && tsc --noEmit -p libs/workout-tracking-contracts/tsconfig.lib.json && tsc --noEmit -p apps/workout-tracking/tsconfig.app.json && tsc --noEmit -p apps/training-progress/tsconfig.app.json && tsc --noEmit -p load-tests/tsconfig.json",
+    "typecheck": "tsc --noEmit -p libs/ddd/tsconfig.lib.json && tsc --noEmit -p libs/telemetry/tsconfig.lib.json && tsc --noEmit -p libs/workout-tracking-contracts/tsconfig.lib.json && tsc --noEmit -p libs/billing-contracts/tsconfig.lib.json && tsc --noEmit -p apps/workout-tracking/tsconfig.app.json && tsc --noEmit -p apps/training-progress/tsconfig.app.json && tsc --noEmit -p apps/billing/tsconfig.app.json && tsc --noEmit -p load-tests/tsconfig.json",
     "start:dev": "nest start --watch",
     "start:dev:workout-tracking": "nest start workout-tracking --watch --env-file apps/workout-tracking/.env --exec \"node --import ./dist/apps/workout-tracking/instrumentation.js\"",
     "start:dev:training-progress": "nest start training-progress --watch --env-file apps/training-progress/.env --exec \"node --import ./dist/apps/training-progress/instrumentation.js\"",
+    "start:dev:billing": "nest start billing --watch --env-file apps/billing/.env --exec \"node --import ./dist/apps/billing/instrumentation.js\"",
     "start:debug": "nest start --debug --watch",
     "start:prod:workout-tracking": "node --env-file-if-exists=apps/workout-tracking/.env --import ./dist/apps/workout-tracking/instrumentation.js dist/apps/workout-tracking/main.js",
     "start:prod:training-progress": "node --env-file-if-exists=apps/training-progress/.env --import ./dist/apps/training-progress/instrumentation.js dist/apps/training-progress/main.js",
+    "start:prod:billing": "node --env-file-if-exists=apps/billing/.env --import ./dist/apps/billing/instrumentation.js dist/apps/billing/main.js",
     "db:generate:workout-tracking": "drizzle-kit generate --config apps/workout-tracking/drizzle.config.ts",
     "db:generate:training-progress": "drizzle-kit generate --config apps/training-progress/drizzle.config.ts",
     "db:migrate:workout-tracking": "drizzle-kit migrate --config apps/workout-tracking/drizzle.config.ts",
@@ -30,7 +32,8 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "stripe:seed-catalog": "node --env-file-if-exists=apps/billing/.env scripts/stripe/seed-catalog.mjs"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
@@ -79,6 +82,7 @@
     "class-validator": "^0.15.1",
     "cloudevents": "^10.0.0",
     "date-fns": "^4.4.0",
+    "decimal.js": "^10.6.0",
     "drizzle-orm": "1.0.0-rc.4",
     "grammy": "^1.46.0",
     "graphql": "^16.14.2",
@@ -86,6 +90,7 @@
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "stripe": "^23.0.0",
     "uuid": "^14.0.2"
   },
   "devDependencies": {

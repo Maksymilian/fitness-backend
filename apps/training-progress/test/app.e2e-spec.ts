@@ -1,3 +1,4 @@
+import { BILLING_SOURCE, BillingTopics } from '@app/billing-contracts';
 import { WORKOUT_TRACKING_SOURCE, WorkoutTrackingTopics } from '@app/workout-tracking-contracts';
 import { CACHE_MANAGER, type Cache } from '@nestjs/cache-manager';
 import type { INestApplication } from '@nestjs/common';
@@ -29,6 +30,7 @@ const { DeadLetterTopology } = await import('../src/platform/messaging/dead-lett
 const { RedisLockStore } = await import('../src/platform/cache/redis-lock-store.js');
 const { CloudEventDeserializer } = await import('../src/platform/messaging/cloud-event.deserializer.js');
 const { WorkoutTrackingEventsController } = await import('../src/training-progress/workout-tracking-acl/workout-tracking-events.controller.js');
+const { BillingEventsController } = await import('../src/training-progress/billing-acl/billing-events.controller.js');
 const { MissEndedGoalsCommand } = await import('../src/training-progress/training-goals/application/commands/miss-ended-goals.command.js');
 const { ScheduleTriggersController } = await import('../src/training-progress/training-goals/interface/schedule/schedule-triggers.controller.js');
 const { ScheduleTriggers } = await import('../src/platform/messaging/schedule-triggers.js');
@@ -310,8 +312,8 @@ describe('Training Progress (e2e)', () => {
       const missEndedGoals = (now: string) => app.get(CommandBus).execute(new MissEndedGoalsCommand(new Date(now)));
       const endsOn = new Date(period.endsOn).getTime();
       expect(await missEndedGoals(new Date(endsOn + DAY / 2).toISOString())).toBe(0);
-      expect(await missEndedGoals(new Date(endsOn + DAY + 1000).toISOString())).toBeGreaterThanOrEqual(1);
-      expect(await missEndedGoals(new Date(endsOn + DAY + 1000).toISOString())).toBe(0); // a second trigger changes nothing
+      expect(await missEndedGoals(new Date(endsOn + DAY).toISOString())).toBeGreaterThanOrEqual(1); // the grace period ends at endsOn + 1 day
+      expect(await missEndedGoals(new Date(endsOn + DAY).toISOString())).toBe(0); // a second trigger changes nothing
 
       const { data } = await graphql<{ member: { trainingGoals: { status: string }[] } }>(GOALS, { id: 'miss@example.com' });
       expect(data.member.trainingGoals).toEqual([expect.objectContaining({ status: 'MISSED' })]);

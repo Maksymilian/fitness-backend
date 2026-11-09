@@ -4,7 +4,7 @@
 # slow them down or cut them. The URLs come from the service's .env; only their ports change to the
 # proxies' (infrastructure/toxiproxy/proxies.json). The variables set here win over the .env file.
 #
-# Usage: scripts/faults/start-through-toxiproxy.sh workout-tracking|training-progress
+# Usage: scripts/faults/start-through-toxiproxy.sh workout-tracking|training-progress|billing
 #   Needs Toxiproxy: docker compose --profile faults up -d --wait
 set -euo pipefail
 
@@ -15,8 +15,9 @@ SERVICE="${1:-}"
 case "$SERVICE" in
   workout-tracking) CONNECTIONS=("DATABASE_URL 5433 25433" "RABBITMQ_URL 5672 25672") ;;
   training-progress) CONNECTIONS=("DATABASE_URL 5434 25434" "REDIS_URL 6379 26379" "RABBITMQ_URL 5672 25673") ;;
+  billing) CONNECTIONS=("DATABASE_URL 5435 25435" "RABBITMQ_URL 5672 25674") ;;
   *)
-    echo "Usage: $0 workout-tracking|training-progress" >&2
+    echo "Usage: $0 workout-tracking|training-progress|billing" >&2
     exit 2
     ;;
 esac

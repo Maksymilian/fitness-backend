@@ -13,7 +13,7 @@
 #   clear [<proxy>]               no faults on the proxy, and it's on; without a proxy, on all of them
 #
 # Proxies: workout-tracking-db, workout-tracking-rabbitmq, training-progress-db,
-# training-progress-redis, training-progress-rabbitmq.
+# training-progress-redis, training-progress-rabbitmq, billing-db, billing-rabbitmq.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

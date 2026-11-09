@@ -13,7 +13,7 @@
 #   backlog           with Training Progress stopped: recordings whose events wait in its queue
 #   reconcile         after the backlog was moved and consumed: -e RUN_ID=... -e SINCE=... -e DLQ_BEFORE=...
 #
-# Needs: both services (pnpm start:dev:<service>), the members (load-tests/seed.sh), and the
+# Needs: the three services (pnpm start:dev:<service>), the members (load-tests/seed.sh), and the
 # observability profile. The admin tokens come from the services' .env, Grafana's password from .env.
 # Each run is an annotation on the Fitness platform dashboard (tag `load-test`), and its reports
 # (web dashboard, metrics, summary, console output) go to var/load-tests/<test id>/.
@@ -37,9 +37,10 @@ env_value() {
   (grep -E "^$2=" "$ROOT_DIR/$1" 2>/dev/null || true) | tail -n 1 | cut -d= -f2-
 }
 
-export WORKOUT_TRACKING_ADMIN_TOKEN TRAINING_PROGRESS_ADMIN_TOKEN GRAFANA_AUTH RABBITMQ_AUTH
+export WORKOUT_TRACKING_ADMIN_TOKEN TRAINING_PROGRESS_ADMIN_TOKEN BILLING_ADMIN_TOKEN GRAFANA_AUTH RABBITMQ_AUTH
 WORKOUT_TRACKING_ADMIN_TOKEN="$(env_value apps/workout-tracking/.env ADMIN_TOKEN)"
 TRAINING_PROGRESS_ADMIN_TOKEN="$(env_value apps/training-progress/.env ADMIN_TOKEN)"
+BILLING_ADMIN_TOKEN="$(env_value apps/billing/.env ADMIN_TOKEN)"
 GRAFANA_PASSWORD="$(env_value .env GRAFANA_ADMIN_PASSWORD)"
 GRAFANA_AUTH="admin:${GRAFANA_PASSWORD:-admin}" # Compose's own default when .env doesn't set it
 # amqp://user:password@host:port: the management API takes the same user.
@@ -96,7 +97,7 @@ echo "k6: $DESCRIPTION; reports in $REPORTS/; Grafana: k6 Prometheus, Test ID $T
 # As this user, to write the reports; the variables without a value pass on the ones exported above,
 # out of sight of `ps`. pipefail keeps k6's exit code through tee.
 docker compose -f "$ROOT_DIR/compose.yaml" --profile load-tests run --rm --user "$(id -u):$(id -g)" \
-  -e TEST_ID -e WORKOUT_TRACKING_ADMIN_TOKEN -e TRAINING_PROGRESS_ADMIN_TOKEN -e GRAFANA_AUTH -e RABBITMQ_AUTH \
+  -e TEST_ID -e WORKOUT_TRACKING_ADMIN_TOKEN -e TRAINING_PROGRESS_ADMIN_TOKEN -e BILLING_ADMIN_TOKEN -e GRAFANA_AUTH -e RABBITMQ_AUTH \
   -e LOAD_MEMBERS -e LOAD_HOT_MEMBERS -e LOAD_WRITERS -e K6_WEB_DASHBOARD -e K6_WEB_DASHBOARD_EXPORT \
   k6 run --out experimental-prometheus-rw --out "json=/results/$TEST_ID/metrics.json" --tag "testid=$TEST_ID" \
   --summary-export "/results/$TEST_ID/summary.json" "/load-tests/$SCRIPT" "$@" 2>&1 | tee -a "$ROOT_DIR/$REPORTS/console.log"

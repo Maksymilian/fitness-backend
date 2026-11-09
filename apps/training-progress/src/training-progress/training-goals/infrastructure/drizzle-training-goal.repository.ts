@@ -1,7 +1,7 @@
 import { ConcurrencyConflict, type Transaction } from '@app/ddd';
 import { Injectable } from '@nestjs/common';
 import { InjectDrizzle } from '@nestjs/drizzle';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { type Database, drizzleTransaction } from '../../../platform/database/database.js';
 import { trainingGoals } from '../../../platform/database/schema.js';
 import { MemberId } from '../../members/domain/values/member-id.js';
@@ -43,7 +43,7 @@ export class DrizzleTrainingGoalRepository extends TrainingGoalRepository {
     const rows = await this.db
       .select()
       .from(trainingGoals)
-      .where(and(eq(trainingGoals.status, GoalStatus.Active.value), lt(sql`${trainingGoals.endsOn} + interval '1 day'`, now)));
+      .where(and(eq(trainingGoals.status, GoalStatus.Active.value), lte(sql`${trainingGoals.endsOn} + interval '1 day'`, now)));
     return rows.map(toTrainingGoal);
   }
 

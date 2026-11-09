@@ -2,7 +2,8 @@
 # Seeds the load test members into the local databases (docs/architecture.md, section 17.1): each
 # with a paired piece of equipment in Workout Tracking and a history of workouts, recorded in
 # Workout Tracking and logged in Training Progress with the same ids, as if their events had
-# already been delivered. Local only, and not a Liquibase changeset: volume for load tests and
+# already been delivered; and a membership in Billing, with a year of payments, and the goal
+# allowance it gives in Training Progress. Local only, and not a Liquibase changeset: volume for load tests and
 # query plans, not test records.
 #
 #   load-NNNN@example.com    a workout every day for the last --days days, up to yesterday (UTC);
@@ -86,6 +87,12 @@ SQL
 DELETE FROM logged_workouts WHERE member_id LIKE 'load-%@example.com';
 DELETE FROM personal_records WHERE member_id LIKE 'load-%@example.com';
 DELETE FROM training_goals WHERE member_id LIKE 'load-%@example.com';
+DELETE FROM goal_allowances WHERE member_id LIKE 'load-%@example.com';
+SQL
+  psql_in billing-db billing <<'SQL'
+DELETE FROM ledger_entries WHERE member_id LIKE 'load-%@example.com';
+DELETE FROM provider_customers WHERE member_id LIKE 'load-%@example.com';
+DELETE FROM memberships WHERE member_id LIKE 'load-%@example.com';
 SQL
   docker compose exec -T redis sh -c "redis-cli --scan --pattern '*load-*@example.com*' | xargs -r redis-cli unlink > /dev/null"
   echo "Removed the load test members, their workouts, records and goals, and their cached read models."
@@ -124,6 +131,31 @@ ON CONFLICT DO NOTHING;
 ANALYZE logged_workouts;
 SELECT format('  %s logged workouts of load test members', count(*)) FROM logged_workouts WHERE member_id LIKE 'load-%@example.com' \gset
 \echo :format
+SQL
+
+echo "Billing: their memberships and ledgers; Training Progress: their goal allowances..."
+# Every member has an active monthly membership, paid once a month for a year, as if Stripe's events
+# had been applied: so the load tests' goals never hit the goal allowance of one active goal.
+psql_in billing-db billing <<SQL
+INSERT INTO memberships (id, member_id, plan, status, paid_through, renews, provider_reference, started_at, revision)
+SELECT overlay(overlay(md5(format('load-membership-%s', n)) PLACING '7' FROM 13 FOR 1) PLACING '8' FROM 17 FOR 1)::uuid,
+  format('load-%s@example.com', lpad(n::text, 4, '0')), 'MONTHLY', 'ACTIVE', now() + interval '10 years', true,
+  format('sub_load_%s', n), now() - interval '1 year', 13
+FROM generate_series(1, :members) AS n
+ON CONFLICT DO NOTHING;
+INSERT INTO ledger_entries (id, member_id, kind, amount, currency, occurred_at, provider_reference, plan, paid_through, membership_reference, recorded_at)
+SELECT overlay(overlay(md5(format('load-payment-%s-%s', n, m)) PLACING '7' FROM 13 FOR 1) PLACING '8' FROM 17 FOR 1)::uuid,
+  format('load-%s@example.com', lpad(n::text, 4, '0')), 'PAYMENT', 9.99, 'EUR', now() - make_interval(months => m),
+  format('in_load_%s_%s', n, m), 'MONTHLY', now() - make_interval(months => m - 1), format('sub_load_%s', n), now() - make_interval(months => m)
+FROM generate_series(1, :members) AS n CROSS JOIN generate_series(1, 12) AS m
+ON CONFLICT DO NOTHING;
+ANALYZE memberships, ledger_entries;
+SQL
+psql_in training-progress-db training_progress <<SQL
+INSERT INTO goal_allowances (member_id, unlimited, source_revision, changed_at, version)
+SELECT format('load-%s@example.com', lpad(n::text, 4, '0')), true, 13, now(), 1
+FROM generate_series(1, :members) AS n
+ON CONFLICT DO NOTHING;
 SQL
 
 # Read models cached before this seed would hide its rows until they expire.

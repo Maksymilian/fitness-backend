@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    // Only this library's own sources: importing an app or another library is error TS6059.
+    "rootDir": "./src",
+    "outDir": "../../dist/libs/billing-contracts"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+}
