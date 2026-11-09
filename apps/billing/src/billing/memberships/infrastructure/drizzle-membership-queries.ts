@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDrizzle } from '@nestjs/drizzle';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from '../../../platform/database/database.js';
-import { memberships } from '../../../platform/database/schema.js';
+import { ledgerEntries, memberships } from '../../../platform/database/schema.js';
 import type { MembershipRepresentation } from '../application/membership.representation.interface.js';
 import { MembershipQueries } from '../application/queries/membership-queries.js';
 
@@ -26,5 +26,14 @@ export class DrizzleMembershipQueries extends MembershipQueries {
         endedAt: row.endedAt?.toISOString() ?? null,
       }
     );
+  }
+
+  async paymentRecordedFor(providerReference: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: ledgerEntries.id })
+      .from(ledgerEntries)
+      .where(and(eq(ledgerEntries.kind, 'PAYMENT'), eq(ledgerEntries.membershipReference, providerReference)))
+      .limit(1);
+    return rows.length > 0;
   }
 }
