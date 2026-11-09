@@ -1,5 +1,5 @@
 {
-  "name": "nest-js-migration",
+  "name": "fitness-backend",
   "version": "0.0.1",
   "description": "Fitness platform: Workout Tracking, Training Progress and Billing, three NestJS microservices designed with DDD",
   "author": "",

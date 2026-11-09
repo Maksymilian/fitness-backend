@@ -155,3 +155,7 @@ vite.config.ts.timestamp-*
 var/
 
 postman/
+
+.idea/
+
+*.iml
