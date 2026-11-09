@@ -94,7 +94,7 @@ DELETE FROM ledger_entries WHERE member_id LIKE 'load-%@example.com';
 DELETE FROM provider_customers WHERE member_id LIKE 'load-%@example.com';
 DELETE FROM memberships WHERE member_id LIKE 'load-%@example.com';
 SQL
-  docker compose exec -T valkey sh -c "valkey-cli --scan --pattern '*load-*@example.com*' | xargs -r valkey-cli unlink > /dev/null"
+  docker compose exec -T redis sh -c "redis-cli --scan --pattern '*load-*@example.com*' | xargs -r redis-cli unlink > /dev/null"
   echo "Removed the load test members, their workouts, records and goals, and their cached read models."
   exit 0
 fi
@@ -159,5 +159,5 @@ ON CONFLICT DO NOTHING;
 SQL
 
 # Read models cached before this seed would hide its rows until they expire.
-docker compose exec -T valkey sh -c "valkey-cli --scan --pattern '*load-*@example.com*' | xargs -r valkey-cli unlink > /dev/null"
+docker compose exec -T redis sh -c "redis-cli --scan --pattern '*load-*@example.com*' | xargs -r redis-cli unlink > /dev/null"
 echo "Done: LOAD_MEMBERS=$MEMBERS LOAD_HOT_MEMBERS=$HOT for the load tests (load-tests/k6.sh passes them on)."

@@ -27,7 +27,7 @@ describe('ReadCache', () => {
   let locks: Locks;
 
   beforeAll(async () => {
-    // In memory: one process, which is all these cases need; ValkeyLockStore's spec covers Valkey.
+    // In memory: one process, which is all these cases need; RedisLockStore's spec covers Redis.
     const moduleRef = await Test.createTestingModule({ imports: [LocksModule.forRoot()] }).compile();
     await moduleRef.init();
     locks = moduleRef.get(Locks);
@@ -121,7 +121,7 @@ describe('ReadCache', () => {
       expect(Date.now() - startedAt).toBeLessThan(1000);
     });
 
-    it('without the lock store (Valkey down), every reader loads it', async () => {
+    it('without the lock store (Redis down), every reader loads it', async () => {
       const unavailable = { acquire: vi.fn(async () => Promise.reject(new Error('The client is closed'))) } as unknown as Locks;
       const readCache = new ReadCache(createCache(), unavailable, config());
       const load = slowLoad(7);

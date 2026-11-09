@@ -16,19 +16,10 @@ export class Environment {
   @MinLength(1)
   DATABASE_URL: string;
 
-  /** e.g. valkey://localhost:6379 (valkeys:// for TLS) */
+  /** e.g. redis://localhost:6379 */
   @IsString()
   @MinLength(1)
-  VALKEY_URL: string;
-
-  /**
-   * The share of Valkey commands GLIDE traces (0 to 100), by its own sampling, not the SDK's.
-   * GLIDE recommends 1 to 5 in production: a span per command costs latency.
-   */
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  VALKEY_TRACE_SAMPLE_PERCENTAGE: number = 5;
+  REDIS_URL: string;
 
   /** e.g. amqp://fitness:fitness@localhost:5672 */
   @IsString()
@@ -39,12 +30,12 @@ export class Environment {
   @IsIn(['on', 'off'])
   OUTBOX_RELAY: 'on' | 'off' = 'on';
 
-  /** `off` reads the read models from PostgreSQL every time, without Valkey (section 8.1): to compare, in load tests. */
+  /** `off` reads the read models from PostgreSQL every time, without Redis (section 8.1): to compare, in load tests. */
   @IsIn(['on', 'off'])
   READ_CACHE: 'on' | 'off' = 'on';
 
   /**
-   * `on`: on a miss, one caller per key loads the read model, under the key's load lock in Valkey;
+   * `on`: on a miss, one caller per key loads the read model, under the key's load lock in Redis;
    * the others wait for its value (section 8.1). `off` lets every caller that misses load it: a
    * cache stampede, to compare.
    */

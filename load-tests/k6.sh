@@ -57,7 +57,7 @@ DESCRIPTION="$TEST_ID"
 if [[ "$TEST" == streak-stampede ]]; then
   DESCRIPTION="$TEST_ID (READ_CACHE=${READ_CACHE:-on}, READ_CACHE_LOCK=${READ_CACHE_LOCK:-on})"
   # Midnight UTC: every streak expires at once.
-  docker compose -f "$ROOT_DIR/compose.yaml" exec -T valkey sh -c "valkey-cli --scan --pattern '*streak:load-*' | xargs -r valkey-cli unlink > /dev/null"
+  docker compose -f "$ROOT_DIR/compose.yaml" exec -T redis sh -c "redis-cli --scan --pattern '*streak:load-*' | xargs -r redis-cli unlink > /dev/null"
   echo "Forgot the load test members' cached streaks."
 fi
 

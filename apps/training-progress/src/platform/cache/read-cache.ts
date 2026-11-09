@@ -19,7 +19,7 @@ const LOAD_LOCK_TTL_MS = 10_000;
 type ReadResult = 'hit' | 'load' | 'wait' | 'off' | 'unavailable';
 
 /**
- * Cache-aside for read models, on Valkey (section 8). A cache failure never fails a read: it logs a
+ * Cache-aside for read models, on Redis (section 8). A cache failure never fails a read: it logs a
  * warning and reads from PostgreSQL. Forgetting keys does fail, so the invalidation handler is
  * retried.
  *
@@ -45,8 +45,8 @@ export class ReadCache {
   ) {
     this.enabled = config.get('READ_CACHE', { infer: true }) !== 'off';
     this.locked = config.get('READ_CACHE_LOCK', { infer: true }) !== 'off';
-    // @nestjs/cache-manager may wrap the Valkey store in another Keyv: a store that emits `error`
-    // without a listener would crash the process when Valkey drops the connection.
+    // @nestjs/cache-manager may wrap the Redis store in another Keyv: a store that emits `error`
+    // without a listener would crash the process when Redis drops the connection.
     for (const store of cache.stores ?? []) {
       store.on('error', (error: unknown) => this.warn(`Cache unavailable, reading from PostgreSQL: ${(error as Error)?.message ?? error}`));
     }
@@ -85,14 +85,14 @@ export class ReadCache {
   /**
    * The holder of the key's load lock loads it; the others look for its value in the cache, more
    * and more slowly (10 ms up to 100 ms), and try the lock again in case the holder failed. Past
-   * LOAD_LOCK_TTL_MS they load it themselves. Without the lock store (Valkey down), every caller loads.
+   * LOAD_LOCK_TTL_MS they load it themselves. Without the lock store (Redis down), every caller loads.
    */
   private async loadOnce<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
     const giveUpAt = Date.now() + LOAD_LOCK_TTL_MS;
     for (let attempt = 0; ; attempt++) {
       let lock: Lock | null;
       try {
-        // Like a cache call, bounded: a Valkey that stops answering mustn't hold the read.
+        // Like a cache call, bounded: a Redis that stops answering mustn't hold the read.
         lock = await this.locks.acquire(`read-cache:${key}`, { ttl: LOAD_LOCK_TTL_MS, signal: AbortSignal.timeout(CACHE_TIMEOUT_MS) });
       } catch (error) {
         this.warn(`Load lock on ${key} unavailable, reading from PostgreSQL: ${(error as Error).message}`);
@@ -108,7 +108,7 @@ export class ReadCache {
           }
           return await this.loadAndStore(key, ttlMs, load);
         } finally {
-          // If Valkey doesn't answer, the lock expires after its ttl.
+          // If Redis doesn't answer, the lock expires after its ttl.
           await withTimeout(lock.release()).catch(() => false);
         }
       }
@@ -154,7 +154,7 @@ export class ReadCache {
     this.reads.add(1, { 'read_cache.read_model': key.split(':', 1)[0], 'read_cache.result': result });
   }
 
-  /** At most one warning every 10 seconds while Valkey is down. */
+  /** At most one warning every 10 seconds while Redis is down. */
   private warn(message: string): void {
     if (Date.now() - this.lastWarning > 10_000) {
       this.lastWarning = Date.now();

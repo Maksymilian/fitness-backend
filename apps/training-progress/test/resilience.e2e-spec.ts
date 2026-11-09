@@ -10,7 +10,7 @@ import type { App } from 'supertest/types.js';
 import { migratedDatabase, type MigratedDatabase } from './support/migrated-database.js';
 
 process.env.DATABASE_URL = 'postgres://unused:unused@localhost:1/unused';
-process.env.VALKEY_URL = 'valkey://localhost:1';
+process.env.REDIS_URL = 'redis://localhost:1';
 process.env.RABBITMQ_URL = 'amqp://localhost:1';
 process.env.OUTBOX_RELAY = 'off';
 process.env.MAIL_TRANSPORT = 'file';
@@ -22,7 +22,7 @@ process.env.QUERY_TIMEOUT_MS = '200';
 const { AppModule } = await import('../src/app.module.js');
 const { configureHttp } = await import('../src/platform/http/configure-http.js');
 const { DeadLetterTopology } = await import('../src/platform/messaging/dead-letter-topology.js');
-const { ValkeyLockStore } = await import('../src/platform/cache/valkey-lock-store.js');
+const { RedisLockStore } = await import('../src/platform/cache/redis-lock-store.js');
 const { TrainingGoalQueries } = await import('../src/training-progress/training-goals/application/queries/training-goal-queries.js');
 
 /** Section 16: the rate limit (3 requests per minute here) and the timeout of query fields (200 ms here). */
@@ -45,8 +45,8 @@ describe('Training Progress: rate limit and timeouts (e2e)', () => {
       .useValue(createCache())
       .overrideProvider(DeadLetterTopology)
       .useValue({})
-      // No Valkey: the locks are in memory, for this one instance.
-      .overrideProvider(ValkeyLockStore)
+      // No Redis: the locks are in memory, for this one instance.
+      .overrideProvider(RedisLockStore)
       .useValue({})
       .overrideProvider(TrainingGoalQueries)
       .useValue(hangingTrainingGoalQueries)

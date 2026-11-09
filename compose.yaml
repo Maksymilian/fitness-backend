@@ -1,5 +1,5 @@
 # Infrastructure only (docs/architecture.md, section 14): the three services run on the host
-# with `pnpm start:dev:<app>`. `docker compose up -d --wait` starts the databases, Valkey and
+# with `pnpm start:dev:<app>`. `docker compose up -d --wait` starts the databases, Redis and
 # RabbitMQ. Liquibase isn't part of it: scripts/database/liquibase.sh migrates the databases.
 # `--profile observability` adds Grafana Alloy, Loki, Tempo, Prometheus and Grafana (section 15),
 # `--profile faults` adds Toxiproxy (section 16), and `--profile load-tests` k6, which
@@ -59,12 +59,12 @@ services:
       retries: 30
 
   # Training Progress' cache (section 8)
-  valkey:
-    image: valkey/valkey:9-alpine
+  redis:
+    image: redis:8-alpine
     ports:
       - '6379:6379'
     healthcheck:
-      test: ['CMD', 'valkey-cli', 'ping']
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 2s
       timeout: 3s
       retries: 30
@@ -88,7 +88,7 @@ services:
       timeout: 10s
       retries: 30
 
-  # Toxiproxy (section 16): faults between a service and its PostgreSQL, Valkey or RabbitMQ, for local
+  # Toxiproxy (section 16): faults between a service and its PostgreSQL, Redis or RabbitMQ, for local
   # tests. One proxy per connection (infrastructure/toxiproxy/proxies.json); a service goes through
   # them when started with scripts/faults/start-through-toxiproxy.sh, and scripts/faults/fault.sh
   # injects and clears the faults through the API on http://localhost:8474.
@@ -101,7 +101,7 @@ services:
       - '127.0.0.1:25433:25433' # workout-tracking-db
       - '127.0.0.1:25672:25672' # workout-tracking-rabbitmq
       - '127.0.0.1:25434:25434' # training-progress-db
-      - '127.0.0.1:26379:26379' # training-progress-valkey
+      - '127.0.0.1:26379:26379' # training-progress-redis
       - '127.0.0.1:25673:25673' # training-progress-rabbitmq
       - '127.0.0.1:25435:25435' # billing-db
       - '127.0.0.1:25674:25674' # billing-rabbitmq
@@ -112,7 +112,7 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-    depends_on: [workout-tracking-db, training-progress-db, billing-db, valkey, rabbitmq]
+    depends_on: [workout-tracking-db, training-progress-db, billing-db, redis, rabbitmq]
 
   # The Stripe CLI (section 18.6): forwards the events of Stripe's test mode to Billing on the host,
   # so no public URL is needed. `docker compose --profile stripe up -d stripe-cli`; it reads
@@ -134,7 +134,7 @@ services:
 
   # Grafana Alloy (section 15): the services' OpenTelemetry (OTLP/HTTP on 4318, only with Basic Auth:
   # infrastructure/alloy/htpasswd, from scripts/observability/telemetry-credentials.sh), RabbitMQ's
-  # and Valkey's metrics (scraped), and their containers' logs. UI on http://localhost:12345
+  # and Redis' metrics (scraped), and their containers' logs. UI on http://localhost:12345
   alloy:
     image: grafana/alloy:v1.20.1
     profiles: [observability]

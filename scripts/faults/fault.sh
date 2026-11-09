@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Injects and clears faults between a service and its PostgreSQL, Valkey or RabbitMQ, through
+# Injects and clears faults between a service and its PostgreSQL, Redis or RabbitMQ, through
 # Toxiproxy's API (docs/architecture.md, section 16). Only a service started with
 # scripts/faults/start-through-toxiproxy.sh goes through the proxies. Each change is also an
 # annotation (tag `fault`) on the Grafana dashboards, when Grafana runs.
@@ -13,7 +13,7 @@
 #   clear [<proxy>]               no faults on the proxy, and it's on; without a proxy, on all of them
 #
 # Proxies: workout-tracking-db, workout-tracking-rabbitmq, training-progress-db,
-# training-progress-valkey, training-progress-rabbitmq, billing-db, billing-rabbitmq.
+# training-progress-redis, training-progress-rabbitmq, billing-db, billing-rabbitmq.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

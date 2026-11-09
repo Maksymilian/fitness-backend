@@ -1,5 +1,5 @@
 // Grafana Alloy (docs/architecture.md, section 15): the one collector. It receives the services'
-// OpenTelemetry and k6's metrics, scrapes RabbitMQ and Valkey, and collects their containers' logs,
+// OpenTelemetry and k6's metrics, scrapes RabbitMQ and Redis, and collects their containers' logs,
 // then sends traces to Tempo, logs to Loki and metrics to Prometheus. Only its OTLP port is published.
 
 // --- The services: OTLP/HTTP on 4318, only with Basic Auth. The credentials are a bcrypt htpasswd
@@ -87,16 +87,15 @@ prometheus.scrape "rabbitmq_node" {
   forward_to      = [prometheus.remote_write.prometheus.receiver]
 }
 
-// --- Valkey: read straight from the server (INFO), by Alloy's embedded Redis exporter (Valkey
-// speaks the same protocol and INFO; its metrics keep the exporter's redis_ names).
+// --- Redis: read straight from the server (INFO), by Alloy's embedded exporter.
 
-prometheus.exporter.redis "valkey" {
-  redis_addr = "valkey:6379"
+prometheus.exporter.redis "redis" {
+  redis_addr = "redis:6379"
 }
 
-prometheus.scrape "valkey" {
-  job_name        = "valkey"
-  targets         = prometheus.exporter.redis.valkey.targets
+prometheus.scrape "redis" {
+  job_name        = "redis"
+  targets         = prometheus.exporter.redis.redis.targets
   scrape_interval = "15s"
   forward_to      = [prometheus.remote_write.prometheus.receiver]
 }
@@ -119,7 +118,7 @@ prometheus.remote_write "prometheus" {
   }
 }
 
-// --- RabbitMQ's and Valkey's container logs, labelled with their Compose service.
+// --- RabbitMQ's and Redis' container logs, labelled with their Compose service.
 
 discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
@@ -129,7 +128,7 @@ discovery.relabel "infrastructure_logs" {
   targets = discovery.docker.containers.targets
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    regex         = "rabbitmq|valkey"
+    regex         = "rabbitmq|redis"
     action        = "keep"
   }
   rule {

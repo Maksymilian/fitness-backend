@@ -6,7 +6,7 @@ import { ReadCache } from './read-cache.js';
 
 /**
  * Deletes the cached read models a committed change made stale. It listens to existing facts; no
- * event exists just for it. Deleting a key twice is harmless, so it has no inbox; while Valkey is
+ * event exists just for it. Deleting a key twice is harmless, so it has no inbox; while Redis is
  * unreachable it fails, and the outbox retries it.
  */
 @Injectable()

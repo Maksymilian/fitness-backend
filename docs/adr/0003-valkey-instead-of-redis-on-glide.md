@@ -1,6 +1,6 @@
 # 3. Valkey instead of Redis, on the Valkey GLIDE client
 
-- **Status:** Accepted
+- **Status:** Withdrawn on 2026-11-07: Training Progress is back on Redis (`@keyv/redis`, `@redis/client`); the migration wasn't needed yet. Kept for when Valkey is reconsidered.
 - **Date:** 2026-10-30
 - **Related:** `docs/architecture.md` sections 8, 15 and 16
 

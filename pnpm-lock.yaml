@@ -17,6 +17,9 @@ importers:
       '@date-fns/utc':
         specifier: ^2.1.1
         version: 2.1.1
+      '@keyv/redis':
+        specifier: ^6.1.0
+        version: 6.1.0(@opentelemetry/api@1.9.1)(keyv@6.1.0)
       '@nestjs/apollo':
         specifier: ^14.0.3
         version: 14.0.3(@apollo/server@5.5.1(graphql@16.14.2)(supports-color@7.2.0))(@as-integrations/express5@1.1.2(@apollo/server@5.5.1(graphql@16.14.2)(supports-color@7.2.0))(express@5.2.1(supports-color@7.2.0)))(@nestjs/common@12.1.2(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.1.2)(@nestjs/graphql@14.0.3(@nestjs/common@12.1.2(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.1.2)(class-transformer@0.5.1)(class-validator@0.15.1)(graphql@16.14.2)(reflect-metadata@0.2.2)(typescript@6.0.3))(graphql@16.14.2)
@@ -119,9 +122,9 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.43.0
         version: 1.43.0
-      '@valkey/valkey-glide':
-        specifier: 2.5.3
-        version: 2.5.3
+      '@redis/client':
+        specifier: 6.3.0
+        version: 6.3.0(@opentelemetry/api@1.9.1)
       amqp-connection-manager:
         specifier: ^5.0.0
         version: 5.0.0(amqplib@2.2.0)
@@ -198,7 +201,7 @@ importers:
       '@testcontainers/rabbitmq':
         specifier: ^12.2.1
         version: 12.2.1(supports-color@7.2.0)
-      '@testcontainers/valkey':
+      '@testcontainers/redis':
         specifier: ^12.2.1
         version: 12.2.1(supports-color@7.2.0)
       '@types/express':
@@ -629,6 +632,12 @@ packages:
 
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
+
+  '@keyv/redis@6.1.0':
+    resolution: {integrity: sha512-H1nYM70uS+LtYWLJOqnaFJrFAm3MpEgjOEeFfHd7VaE3RKfEJKr8pnKOfmftBx5KfWuNnKzP1VBViuVHAJR+MA==}
+    engines: {node: '>= 22.19.0'}
+    peerDependencies:
+      keyv: ^6.1.0
 
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
@@ -1684,6 +1693,18 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
+  '@redis/client@6.3.0':
+    resolution: {integrity: sha512-fHrjwGCBvAANGi+TuRuwKi83sIOzgHr8eh+Uf48w3fSX7Hhrz174NrWqfJhAC2vnN0d/tfaZpdr6+o6JC3QHwg==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@node-rs/xxhash': ^1.1.0
+      '@opentelemetry/api': '>=1 <2'
+    peerDependenciesMeta:
+      '@node-rs/xxhash':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+
   '@rolldown/binding-android-arm-eabi@1.2.12':
     resolution: {integrity: sha512-dB/a1214qKfHMXCpgqR4OZT+jS4kTyEXbQGJPqzobt5EwH5rX080pxE37alt3RzvR1bf1Yz/yGqRfrYAxuPw0A==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -1990,8 +2011,8 @@ packages:
   '@testcontainers/rabbitmq@12.2.1':
     resolution: {integrity: sha512-vPYI7OHGcV9vtmu9hp8lYRVNJJxky+AJLG5uHiwfckMBS2vIRZZr3TR1QkziZJpoO8/nWAXyVmxhSQeHomR7lw==}
 
-  '@testcontainers/valkey@12.2.1':
-    resolution: {integrity: sha512-H6Bp9hFKUc987/0cNODGGApNnZuLBSfr4SY8DOnJ7pgIa+QCXPskwYRECk4luIvPwWBbyDeiwaRUYq4qUzO59Q==}
+  '@testcontainers/redis@12.2.1':
+    resolution: {integrity: sha512-pF/HAs0LEsSfuQv++Wyp36S9cFNo8vfweddUOJQl/+wuAW1ThlupJLQv7L4PKkpqYGq+epRuaKhPrNKKnmbU3g==}
 
   '@tokenizer/inflate@0.4.1':
     resolution: {integrity: sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA==}
@@ -2095,44 +2116,6 @@ packages:
 
   '@types/validator@13.15.10':
     resolution: {integrity: sha512-T8L6i7wCuyoK8A/ZeLYt1+q0ty3Zb9+qbSSvrIVitzT3YjZqkTZ40IbRsPanlB4h1QB3JVL1SYCdR6ngtFYcuA==}
-
-  '@valkey/valkey-glide-darwin-arm64@2.5.3':
-    resolution: {integrity: sha512-DB2dooH/OLhN6v2/rHbg5L+cynkYx/HhXSG/Iqs18+xaKvWlQZwdbfj5x2AXK0XObQVQaJKLMnc6+EYbv5+Img==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@valkey/valkey-glide-darwin-x64@2.5.3':
-    resolution: {integrity: sha512-Sxw+2uA2K445FCdIr78T7XirwKHMDP1rdliqRzRWgx87PYQOfkp8Qz/LXyri3la+YZ6/rnGezwkyuNlDT75kBw==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@valkey/valkey-glide-linux-arm64-gnu@2.5.3':
-    resolution: {integrity: sha512-/hpjvDQGarJe1KJFSYcUfPB1KrnhqUBkiFbK3Yq9wyv8CA/Jh5QiADDXYjDjVwpY+Ocy+znm6E7Od8tNTrmdiw==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@valkey/valkey-glide-linux-arm64-musl@2.5.3':
-    resolution: {integrity: sha512-aKqkDMEewlQvEjdCa+rSWKwL41nLxEshqJ8otMtvpgtRyU2fjRH5yDuJ4JXsCz+4Y/Zi5xQVspUawU37XgIf0A==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@valkey/valkey-glide-linux-x64-gnu@2.5.3':
-    resolution: {integrity: sha512-65JCnAj0IlQqiIzVCNzWo8v1N5c58Hoi2jP+fmtf78+1Uw4JInPAgicGI6GronlaLrfXZRTLqNNnjVez0QeMUg==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@valkey/valkey-glide-linux-x64-musl@2.5.3':
-    resolution: {integrity: sha512-kBsS6nLjhcIcecM+iEUdVdTl/WzkJH8YNSKeKeUPZJUfK3zQqiyw6dbC/w6aYmOB/UrtJOQkuSbRZqfNWyf+Dw==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@valkey/valkey-glide@2.5.3':
-    resolution: {integrity: sha512-VvT7oOr1ZyvPDFUEEovYqVKNaCicUHJPmrfDyflCEi8hzH+YEdxEikYDheHGeclgFW0MlLkJ2rky6pa7tT6iqg==}
-    engines: {node: '>=16'}
 
   '@vitest/coverage-v8@4.1.11':
     resolution: {integrity: sha512-8MVGEFnJIcdGjcbfKmeq8z0pZHH0JlVtoVZH9Q/qwUp6wyFnEJUBMrw9DCaj+ra3vShGmhavjalMIhPNxZAUcw==}
@@ -2476,6 +2459,10 @@ packages:
   cloudevents@10.0.0:
     resolution: {integrity: sha512-uyzC+PpMMRawbouHO+3mlisr3QfEDObmo2pN4oTTF6dZncZgpIzdasZx0tRBFI1dMsqCLZZXMtz8cUuvYqHdbw==}
     engines: {node: '>=20 <=24'}
+
+  cluster-key-slot@1.1.2:
+    resolution: {integrity: sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==}
+    engines: {node: '>=0.10.0'}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -4707,6 +4694,16 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
+  '@keyv/redis@6.1.0(@opentelemetry/api@1.9.1)(keyv@6.1.0)':
+    dependencies:
+      '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
+      cluster-key-slot: 1.1.2
+      hookified: 3.0.4
+      keyv: 6.1.0
+    transitivePeerDependencies:
+      - '@node-rs/xxhash'
+      - '@opentelemetry/api'
+
   '@keyv/serialize@1.1.1': {}
 
   '@kwsites/file-exists@1.1.1(supports-color@7.2.0)':
@@ -5775,6 +5772,10 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
+  '@redis/client@6.3.0(@opentelemetry/api@1.9.1)':
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+
   '@rolldown/binding-android-arm-eabi@1.2.12':
     optional: true
 
@@ -5977,7 +5978,7 @@ snapshots:
       - react-native-b4a
       - supports-color
 
-  '@testcontainers/valkey@12.2.1(supports-color@7.2.0)':
+  '@testcontainers/redis@12.2.1(supports-color@7.2.0)':
     dependencies:
       testcontainers: 12.2.1(supports-color@7.2.0)
     transitivePeerDependencies:
@@ -6121,36 +6122,6 @@ snapshots:
       '@types/superagent': 8.1.11
 
   '@types/validator@13.15.10': {}
-
-  '@valkey/valkey-glide-darwin-arm64@2.5.3':
-    optional: true
-
-  '@valkey/valkey-glide-darwin-x64@2.5.3':
-    optional: true
-
-  '@valkey/valkey-glide-linux-arm64-gnu@2.5.3':
-    optional: true
-
-  '@valkey/valkey-glide-linux-arm64-musl@2.5.3':
-    optional: true
-
-  '@valkey/valkey-glide-linux-x64-gnu@2.5.3':
-    optional: true
-
-  '@valkey/valkey-glide-linux-x64-musl@2.5.3':
-    optional: true
-
-  '@valkey/valkey-glide@2.5.3':
-    dependencies:
-      long: 5.3.2
-      protobufjs: 7.6.6
-    optionalDependencies:
-      '@valkey/valkey-glide-darwin-arm64': 2.5.3
-      '@valkey/valkey-glide-darwin-x64': 2.5.3
-      '@valkey/valkey-glide-linux-arm64-gnu': 2.5.3
-      '@valkey/valkey-glide-linux-arm64-musl': 2.5.3
-      '@valkey/valkey-glide-linux-x64-gnu': 2.5.3
-      '@valkey/valkey-glide-linux-x64-musl': 2.5.3
 
   '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
     dependencies:
@@ -6511,6 +6482,8 @@ snapshots:
       process: 0.11.10
       util: 0.12.5
       uuid: 8.3.2
+
+  cluster-key-slot@1.1.2: {}
 
   color-convert@2.0.1:
     dependencies:

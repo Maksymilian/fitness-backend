@@ -13,7 +13,7 @@ import { migratedDatabase, type MigratedDatabase } from './support/migrated-data
 import { buttonPress, buttons, recordingBot, TELEGRAM_WEBHOOK_SECRET, texts, textMessage } from './support/telegram.js';
 
 process.env.DATABASE_URL = 'postgres://unused:unused@localhost:1/unused';
-process.env.VALKEY_URL = 'valkey://localhost:1';
+process.env.REDIS_URL = 'redis://localhost:1';
 process.env.RABBITMQ_URL = 'amqp://localhost:1';
 process.env.OUTBOX_RELAY = 'off';
 process.env.MAIL_TRANSPORT = 'file';
@@ -27,7 +27,7 @@ process.env.QUERY_TIMEOUT_MS = '10000';
 const { AppModule } = await import('../src/app.module.js');
 const { configureHttp } = await import('../src/platform/http/configure-http.js');
 const { DeadLetterTopology } = await import('../src/platform/messaging/dead-letter-topology.js');
-const { ValkeyLockStore } = await import('../src/platform/cache/valkey-lock-store.js');
+const { RedisLockStore } = await import('../src/platform/cache/redis-lock-store.js');
 
 describe('Telegram bot (e2e)', () => {
   let client: MigratedDatabase;
@@ -45,8 +45,8 @@ describe('Telegram bot (e2e)', () => {
       .useValue(createCache())
       .overrideProvider(DeadLetterTopology)
       .useValue({})
-      // No Valkey: the locks are in memory, for this one instance.
-      .overrideProvider(ValkeyLockStore)
+      // No Redis: the locks are in memory, for this one instance.
+      .overrideProvider(RedisLockStore)
       .useValue({})
       .overrideProvider(Bot)
       .useValue(recording.bot)

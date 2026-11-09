@@ -51,7 +51,7 @@ defaultResourceAttribute('service.version', typeof BUILD_VERSION === 'string' ? 
 // The stable HTTP conventions: the request-rate alert counts http.server.request.duration.
 process.env.OTEL_SEMCONV_STABILITY_OPT_IN ??= 'http';
 // Only the libraries the services use; the variable can still change the list.
-process.env.OTEL_NODE_ENABLED_INSTRUMENTATIONS ??= 'http,express,nestjs-core,graphql,pg,amqplib,undici,runtime-node';
+process.env.OTEL_NODE_ENABLED_INSTRUMENTATIONS ??= 'http,express,nestjs-core,graphql,pg,redis,amqplib,undici,runtime-node';
 
 const HEALTH_CHECK = /\/health\/(live|ready)$/;
 const isCarried = (key: string) => key === FLOW_ID || key === INTERFACE;
@@ -79,6 +79,7 @@ new NodeSDK({
     '@opentelemetry/instrumentation-graphql': { mergeItems: true, ignoreTrivialResolveSpans: true },
     // Only inside a trace: the outbox relay's polling and Telegram's long polling would each be a trace.
     '@opentelemetry/instrumentation-pg': { requireParentSpan: true },
+    '@opentelemetry/instrumentation-redis': { requireParentSpan: true },
     // Telegram's long polling (getUpdates) waits for updates on purpose: it would be a slow call to
     // the outgoing-call latency alert. The bot's other calls are measured.
     '@opentelemetry/instrumentation-undici': { requireParentforSpans: true, ignoreRequestHook: (request) => request.path.includes('/getUpdates') },

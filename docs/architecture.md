@@ -6,7 +6,7 @@ A fitness platform made of three NestJS microservices, designed with DDD. The fu
 
 | Bounded context | Subdomain | Runs in | API | Data |
 |---|---|---|---|---|
-| **Training Progress**: training log, progress summaries, streaks, personal records, training goals | Core | `apps/training-progress` | GraphQL, external | PostgreSQL instance 2, Valkey cache |
+| **Training Progress**: training log, progress summaries, streaks, personal records, training goals | Core | `apps/training-progress` | GraphQL, external | PostgreSQL instance 2, Redis cache |
 | **Workout Tracking**: equipment, pairing, recording, correcting and voiding workouts | Supporting | `apps/workout-tracking` | REST, internal | PostgreSQL instance 1 |
 | **Billing**: memberships, the ledger of payments and refunds, over Stripe | Supporting | `apps/billing` | REST, external; Stripe's webhook | PostgreSQL instance 3 |
 | **Notifications**: mail about achievements, built on `@nestjs/mail` | Generic | a module in `apps/training-progress` | none | none of its own |
@@ -77,7 +77,7 @@ The vocabulary used here is defined in [the ubiquitous language](ubiquitous-lang
 
 ## 1. Scope
 
-**In scope:** three NestJS microservices in one Nest CLI monorepo; a separate PostgreSQL instance for each; domain events and integration events through the transactional outbox, with RabbitMQ between the services; Valkey caching; Terminus health checks; validation on every boundary; DDD, strategic and tactical. Infrastructure for development (the three PostgreSQL instances, Valkey, RabbitMQ, and the Stripe CLI) runs in Docker Compose, and Liquibase, also run from Compose, creates and updates both schemas.
+**In scope:** three NestJS microservices in one Nest CLI monorepo; a separate PostgreSQL instance for each; domain events and integration events through the transactional outbox, with RabbitMQ between the services; Redis caching; Terminus health checks; validation on every boundary; DDD, strategic and tactical. Infrastructure for development (the three PostgreSQL instances, Redis, RabbitMQ, and the Stripe CLI) runs in Docker Compose, and Liquibase, also run from Compose, creates and updates both schemas.
 
 **Out of scope for now, on purpose:** authentication and authorization, SQS/SNS, Docker images of the services, Terraform, and monitoring (metrics, tracing, alerting). Where a design decision depends on one of them, this document says so.
 
@@ -101,7 +101,7 @@ The effort follows the classification: the core domain gets the full tactical to
 | Bounded context | Subdomain | Service | Main API | Database |
 |---|---|---|---|---|
 | Workout Tracking | Supporting | `apps/workout-tracking` | REST, internal (`/internal/v1/...`) | PostgreSQL instance 1, `workout_tracking` |
-| Training Progress | Core | `apps/training-progress` | GraphQL, external (`/graphql`) | PostgreSQL instance 2, `training_progress`; Valkey cache |
+| Training Progress | Core | `apps/training-progress` | GraphQL, external (`/graphql`) | PostgreSQL instance 2, `training_progress`; Redis cache |
 | Billing | Supporting | `apps/billing` | REST, external (`/v1/members/...`); Stripe's webhook (`/stripe/events`) | PostgreSQL instance 3, `billing` |
 | Notifications | Generic | Hosted as a module inside `apps/training-progress` | None | None of its own (its outbox inbox lives in instance 2) |
 
@@ -705,14 +705,14 @@ There are no scheduled jobs in the services (no `@nestjs/schedule`): they run as
 - **Process:** Training Progress' second RMQ listener consumes `training-progress.schedule` (`prefetchCount: 1`, `noAck: false`, the same `CloudEventDeserializer`). RabbitMQ gives each trigger to one instance; `ScheduleTriggersController` dispatches the command with the current time (`MissEndedGoalsCommand`) and acks once it's done.
 - **Failures:** a failed run is requeued, and RabbitMQ dead-letters it to `training-progress.schedule.dlq` after 5 deliveries: an incident, found through observability. A CronJob retry can publish a trigger twice; that's harmless, because the policy is idempotent (`miss()` changes only an active goal past its grace period).
 
-## 8. Caching (Valkey)
+## 8. Caching (Redis)
 
-Based on [`data/caching.md`](nestjs/data/caching.md): `@nestjs/cache-manager` with `ValkeyStore`, a Keyv store on Valkey GLIDE (`@valkey/valkey-glide`), Training Progress only. No Keyv adapter exists for GLIDE (`@keyv/valkey` runs on iovalkey, which no OpenTelemetry instrumentation covers), so `ValkeyStore` is Keyv's promise-based store contract, in a few lines; Keyv still serializes the values and prefixes the keys ([ADR 3](adr/0003-valkey-instead-of-redis-on-glide.md)).
+Based on [`data/caching.md`](nestjs/data/caching.md): `@nestjs/cache-manager` with `@keyv/redis`, Training Progress only.
 
-- **Valkey only, no in-memory tier:** with several instances, an in-memory tier can't be invalidated from a handler running on another instance.
+- **Redis only, no in-memory tier:** with several instances, an in-memory tier can't be invalidated from a handler running on another instance.
 - **Cache-aside in the query handlers through `CACHE_MANAGER`.** The docs warn that `CacheInterceptor` doesn't work with GraphQL, because interceptors run once per field resolver.
-- **Invalidation is a domain event handler** (`cache-invalidation`, `inbox: false`), so it runs only after the change committed, and is retried if Valkey is briefly unavailable.
-- **Cache failures never fail a request:** on a Valkey error, read from PostgreSQL, log a warning, and the health check reports `degraded`.
+- **Invalidation is a domain event handler** (`cache-invalidation`, `inbox: false`), so it runs only after the change committed, and is retried if Redis is briefly unavailable.
+- **Cache failures never fail a request:** on a Redis error, read from PostgreSQL, log a warning, and the health check reports `degraded`.
 
 | Key | Holds | TTL | Deleted on |
 |---|---|---|---|
@@ -724,15 +724,15 @@ The training log isn't cached: it's paginated, and the `(member_id, started_at d
 
 ### 8.1 A cache stampede, and the load lock
 
-When a cached key is missing (it expired, an event forgot it, Valkey lost it), every request for it at that moment misses and reads the same thing from PostgreSQL: a cache stampede. Midnight UTC is one for streaks, which all expire at the end of the UTC day; a popular member recording a workout is another, since it forgets their streak while many apps read it.
+When a cached key is missing (it expired, an event forgot it, Redis lost it), every request for it at that moment misses and reads the same thing from PostgreSQL: a cache stampede. Midnight UTC is one for streaks, which all expire at the end of the UTC day; a popular member recording a workout is another, since it forgets their streak while many apps read it.
 
-- **The load lock.** On a miss, `ReadCache` takes the key's lock, `read-cache:<key>`, with `@nestjs/locks` ([`reliability/locks.md`](nestjs/reliability/locks.md)) on Valkey: `ValkeyLockStore`, the docs' Redis store ported to GLIDE (one Lua script per method, `invokeScript`), on a client of its own. The holder looks in the cache again, loads the read model, stores it and releases the lock. The others, on any instance, look in the cache every 10 ms, then up to every 100 ms, and try the lock again each time, so that when a holder fails, the next caller loads it.
-- **At most 10 seconds.** The lock lives 10 s without a renewal: a holder that dies frees it within 10 s. While the holder is alive, `@nestjs/locks` renews it every `ttl / 3`; the waiters give up after 10 s and load the read model themselves. Taking or releasing the lock is bounded like a cache call (250 ms): a Valkey that stops answering doesn't hold a read.
-- **Valkey down:** the lock can't be taken, and every caller loads, as with the cache off.
-- **No fencing.** Two loaders at once (a lock lost in a pause, or the 10 s passed) store the same value. So the read cache takes no fencing token, and Valkey's eviction policy doesn't threaten these locks the way it does the docs' scheduled jobs.
+- **The load lock.** On a miss, `ReadCache` takes the key's lock, `read-cache:<key>`, with `@nestjs/locks` ([`reliability/locks.md`](nestjs/reliability/locks.md)) on Redis: `RedisLockStore`, the docs' Redis store (one Lua script per method), on a connection of its own. The holder looks in the cache again, loads the read model, stores it and releases the lock. The others, on any instance, look in the cache every 10 ms, then up to every 100 ms, and try the lock again each time, so that when a holder fails, the next caller loads it.
+- **At most 10 seconds.** The lock lives 10 s without a renewal: a holder that dies frees it within 10 s. While the holder is alive, `@nestjs/locks` renews it every `ttl / 3`; the waiters give up after 10 s and load the read model themselves. Taking or releasing the lock is bounded like a cache call (250 ms): a Redis that stops answering doesn't hold a read.
+- **Redis down:** the lock can't be taken, and every caller loads, as with the cache off.
+- **No fencing.** Two loaders at once (a lock lost in a pause, or the 10 s passed) store the same value. So the read cache takes no fencing token, and Redis' eviction policy doesn't threaten these locks the way it does the docs' scheduled jobs.
 - **Not prevented:** different keys missing at once (each loads once, so midnight still loads every member's streak once); and the invalidation race, where a load that read PostgreSQL before an event forgot the key stores the old value until its TTL.
-- **Switches, to compare in load tests (section 17.2):** `READ_CACHE=off` reads PostgreSQL every time, without Valkey; `READ_CACHE_LOCK=off` lets every caller that misses load: the stampede. Both are `on` by default.
-- **Metric:** `read_cache.reads` (`read_cache_reads_total`), by `read_cache.read_model` (the key's first part: `streak`, `progress-summary`, `personal-records`) and `read_cache.result`: `hit`, `load` (from PostgreSQL), `wait` (another caller's load), `off`, or `unavailable` (Valkey didn't answer). The dashboard's *Read cache and load tests* row shows them.
+- **Switches, to compare in load tests (section 17.2):** `READ_CACHE=off` reads PostgreSQL every time, without Redis; `READ_CACHE_LOCK=off` lets every caller that misses load: the stampede. Both are `on` by default.
+- **Metric:** `read_cache.reads` (`read_cache_reads_total`), by `read_cache.read_model` (the key's first part: `streak`, `progress-summary`, `personal-records`) and `read_cache.result`: `hit`, `load` (from PostgreSQL), `wait` (another caller's load), `off`, or `unavailable` (Redis didn't answer). The dashboard's *Read cache and load tests* row shows them.
 
 Measured with section 17.2's `streak-stampede` (2 members' streaks, 300 reads a second, a workout every 2 seconds, and `fault.sh latency training-progress-db 100` so that a load costs what a heavy query does), on a laptop:
 
@@ -766,12 +766,12 @@ Based on [`reliability/terminus.md`](nestjs/reliability/terminus.md). Every serv
 | Service | `down` (stop sending traffic) | `degraded` (keep serving, visible in the response) |
 |---|---|---|
 | Workout Tracking | Its PostgreSQL | RabbitMQ: the outbox keeps the events, so recording still works |
-| Training Progress | Its PostgreSQL | Valkey (reads fall back to PostgreSQL); RabbitMQ (queries still work, and consumption resumes when it's back) |
+| Training Progress | Its PostgreSQL | Redis (reads fall back to PostgreSQL); RabbitMQ (queries still work, and consumption resumes when it's back) |
 | Billing | Its PostgreSQL | RabbitMQ: the outbox keeps the membership events. Stripe isn't checked: checkouts fail without it, everything else works |
 
 - PostgreSQL: a custom indicator with `HealthIndicatorService.attempt()` running `select 1`; Terminus has no Drizzle indicator.
 - An instance starts while its PostgreSQL is down: liveness answers `200`, readiness `503` until the database answers. The outbox store (`StartupTolerantPostgresOutboxStore`) skips its startup schema check when `select 1` fails and makes it at its first call; a database that answers with a schema that's behind still fails the startup. When PostgreSQL restarts, the pool's `error` listener (`withPoolErrorsLogged()`) logs each lost idle connection instead of letting it end the process, and the pool reconnects at the next query.
-- Valkey: a custom indicator that returns `degraded()` when a cache round trip fails.
+- Redis: a custom indicator that returns `degraded()` when a cache round trip fails.
 - RabbitMQ: `MicroserviceHealthIndicator.pingCheck()` with `Transport.RMQ`, reported as `degraded` (a custom `attempt()` indicator if the built-in one doesn't support RMQ).
 - `TerminusModule.forRoot({ gracefulShutdownTimeoutMs })` and `app.enableShutdownHooks()`: on `SIGTERM`, readiness turns `503` before the app stops, and the outbox relay drains instead of leaving messages leased.
 
@@ -838,13 +838,13 @@ libs/
   telemetry/                           OpenTelemetry (section 15): instrumentation.ts (the SDK, loaded with node --import), flows,
                                        the staged trace of outbox messages, the logger, the count of @nestjs/resilience's
                                        events (technical, no domain concepts)
-infrastructure/alloy/                  Grafana Alloy: OTLP with Basic Auth (htpasswd, gitignored), RabbitMQ and Valkey scraping
+infrastructure/alloy/                  Grafana Alloy: OTLP with Basic Auth (htpasswd, gitignored), RabbitMQ and Redis scraping
 infrastructure/{tempo,prometheus}/     Their configuration (Loki uses its image's own)
 infrastructure/grafana/                Provisioned data sources, dashboards and alert rules (section 15.4)
 infrastructure/rabbitmq/               definitions.json (user, exchanges, queues, bindings of section 7.2), rabbitmq.conf
 infrastructure/toxiproxy/              proxies.json: one Toxiproxy proxy per connection of a service (section 16.3)
 postman/                               workout-tracking (REST), training-progress (GraphQL) and billing (REST) collections
-compose.yaml                           PostgreSQL x3, Valkey, RabbitMQ; profiles observability (section 15), faults (Toxiproxy), stripe (the Stripe CLI)
+compose.yaml                           PostgreSQL x3, Redis, RabbitMQ; profiles observability (section 15), faults (Toxiproxy), stripe (the Stripe CLI)
 scripts/database/                      Liquibase in Docker: update, tag and roll back one service's database
 scripts/scheduler/                     The scheduler image: publishes one schedule trigger and exits (section 7.5)
 scripts/stripe/                        seed-catalog.mjs: Billing's product, prices and Billing Portal in a Stripe sandbox (section 18.6)
@@ -900,8 +900,8 @@ What isn't restricted, on purpose: `application/` and `interface/` may import ot
 | Notifications (generic) | `@nestjs/mail` | Official package with an outbox integration; file transport for development |
 | Telegram bot | [grammY](https://grammy.dev), with `@nestjs/webhooks` for the webhook ([`http/webhooks.md`](nestjs/http/webhooks.md)) | The Nest docs have no Telegram recipe. grammY routes bot commands and buttons and types the Bot API; `@nestjs/webhooks` verifies Telegram's secret token and deduplicates updates with the outbox's inbox |
 | Calendar (generic) | `date-fns` | ISO weeks and period boundaries without hand-written date arithmetic |
-| Cache | `@nestjs/cache-manager` with `ValkeyStore`, a Keyv store on `@valkey/valkey-glide` | Official recipe; no Keyv adapter exists for GLIDE (ADR 3) |
-| Distributed locks | `@nestjs/locks` ([`reliability/locks.md`](nestjs/reliability/locks.md)) with the docs' Redis store ported to Valkey (`ValkeyLockStore`, on `@valkey/valkey-glide`) | Official package: the read cache's load lock, one loader per key on any instance (section 8.1). Its contract suite runs against a real Valkey (Testcontainers) |
+| Cache | `@nestjs/cache-manager` with `@keyv/redis` | Official recipe |
+| Distributed locks | `@nestjs/locks` ([`reliability/locks.md`](nestjs/reliability/locks.md)) with the docs' Redis store (`RedisLockStore`, on `@redis/client`) | Official package: the read cache's load lock, one loader per key on any instance (section 8.1). Its contract suite runs against a real Redis (Testcontainers) |
 | Health | `@nestjs/terminus` | Official recipe |
 | Security headers | `app.useSecurityHeaders()` ([`security/helmet.md`](nestjs/security/helmet.md)) | Built into Nest 12.1, with Helmet 8's defaults: no extra package (section 6.4) |
 | CORS | `app.enableCors()` ([`security/cors.md`](nestjs/security/cors.md)), Training Progress only, with `CORS_ORIGINS` | Official recipe: Express' `cors` middleware (section 6.4) |
@@ -913,10 +913,10 @@ What isn't restricted, on purpose: `application/` and `interface/` may import ot
 | Money | `decimal.js` in the domain, `NUMERIC(10,2)` in PostgreSQL | Exact amounts, never floats; two-decimal currencies only, so every amount fits the column (ADR 2) |
 | Validation | `class-validator`, `class-transformer` | Official recipe |
 | Configuration | `@nestjs/config` | Official recipe |
-| Observability | OpenTelemetry SDK for Node.js (`@app/telemetry`); Grafana Alloy (OTLP with Basic Auth, RabbitMQ and Valkey scraping), Tempo, Loki, Prometheus and Grafana | The OpenTelemetry standard: the services know no vendor, and the stack is open source and runs in Compose. `@nestjs/observe` ([`observability/`](nestjs/observability/overview.md)) is NestJS' own platform, with its own protocol and `x-request-id` propagation |
+| Observability | OpenTelemetry SDK for Node.js (`@app/telemetry`); Grafana Alloy (OTLP with Basic Auth, RabbitMQ and Redis scraping), Tempo, Loki, Prometheus and Grafana | The OpenTelemetry standard: the services know no vendor, and the stack is open source and runs in Compose. `@nestjs/observe` ([`observability/`](nestjs/observability/overview.md)) is NestJS' own platform, with its own protocol and `x-request-id` propagation |
 | Scheduled work | Kubernetes CronJobs publishing schedule triggers (`scripts/scheduler/`), no `@nestjs/schedule` | The services run as several instances: Kubernetes decides when, and RabbitMQ gives each trigger to one instance. Only Miss Ended Goals; stale messages are incidents for observability, not for a cleanup job |
 | Architecture check | `dependency-cruiser`, run with pnpm | The Nest docs have no recipe for import boundaries. It checks the resolved import graph (including `.js` → `.ts` under `nodenext` and the `@app/*` aliases), and its rules compose, which oxlint's overrides don't (section 11.1) |
-| Tests | Vitest with SWC (`unplugin-swc`, [`recipes/swc.md`](nestjs/recipes/swc.md)), Testcontainers (`@testcontainers/postgresql`, `@testcontainers/valkey`, `@testcontainers/rabbitmq`) | Aggregate tests as given/when/then on domain events; ACL, cache and filter tests; e2e tests per service on a real PostgreSQL in Docker with the Liquibase changesets, the relay driven with `runOnce()`, as in the outbox docs' Testing section. A container per e2e file, the same images as compose.yaml: no emulator to diverge from production. The lock store's and the RabbitMQ transport's contract suites (`pnpm test`) run the same way, each against its own container |
+| Tests | Vitest with SWC (`unplugin-swc`, [`recipes/swc.md`](nestjs/recipes/swc.md)), Testcontainers (`@testcontainers/postgresql`, `@testcontainers/redis`, `@testcontainers/rabbitmq`) | Aggregate tests as given/when/then on domain events; ACL, cache and filter tests; e2e tests per service on a real PostgreSQL in Docker with the Liquibase changesets, the relay driven with `runOnce()`, as in the outbox docs' Testing section. A container per e2e file, the same images as compose.yaml: no emulator to diverge from production. The lock store's and the RabbitMQ transport's contract suites (`pnpm test`) run the same way, each against its own container |
 | Build | Nest CLI monorepo with Rspack (the monorepo default) | One bundle per service in `dist/apps/<service>/main.js`; mail templates copied as CLI assets |
 | API collections | Postman: `postman/workout-tracking.postman_collection.json` (REST), `postman/training-progress.postman_collection.json` (GraphQL), `postman/billing.postman_collection.json` (REST; Stripe's events signed in a pre-request script) | Every request checks its status code; they run green with newman against the Compose setup |
 
@@ -929,17 +929,17 @@ Every building block is generated with the Nest CLI (see `CLAUDE.md`). Each mile
 3. **Workout Tracking: application, persistence and REST.** Drizzle schema and repositories, `@nestjs/cqrs` handlers, controllers (`nest generate module|controller ... --project workout-tracking`), the domain exception filter, the global `ValidationPipe`, URI versioning. E2E tests, including duplicate recordings and optimistic-lock conflicts.
 4. **Workout Tracking: outbox and published language.** `@nestjs/outbox`, `DomainEventPublisher` with the route table, the RabbitMQ transport with publisher confirms, the contracts, the dead-letter admin routes. Tests: a failed transaction publishes nothing; a duplicate recording publishes nothing new.
 5. **Training Progress: training log.** Hybrid app, the ACL with the inbox, the `LoggedWorkout` aggregate, its domain events, GraphQL `member` and `trainingLog`. Tests: the ACL's translation of each integration event; redelivered and out-of-order integration events change nothing.
-6. **Training Progress: personal records, progress summary, streak, Valkey.** The `PersonalRecords` aggregate and its policy, the read models, cache-aside, invalidation through domain events. Tests: each policy is idempotent; Valkey down still answers.
+6. **Training Progress: personal records, progress summary, streak, Redis.** The `PersonalRecords` aggregate and its policy, the read models, cache-aside, invalidation through domain events. Tests: each policy is idempotent; Redis down still answers.
 7. **Training Progress: training goals.** The `TrainingGoal` aggregate and its progress criteria, mutations, the Check Goal Achievement policy, Miss Ended Goals.
 8. **Notifications (generic).** Training Progress' published language for it, `@nestjs/mail` with `FileMailTransport`, the two handlers, `MemberContactDirectory` with its development adapter.
 9. **Health checks in both apps** (`nest generate module health`, `nest generate controller health`, custom indicators), graceful shutdown, and two Postman collections: Workout Tracking's REST API and Training Progress' GraphQL API.
-10. **Infrastructure and migrations.** Docker Compose for both PostgreSQL instances, Valkey and RabbitMQ (with its topology from a definitions file), and Liquibase changelogs per service, with test records.
+10. **Infrastructure and migrations.** Docker Compose for both PostgreSQL instances, Redis and RabbitMQ (with its topology from a definitions file), and Liquibase changelogs per service, with test records.
 
 ## 14. Assumptions and open questions
 
 | # | Topic | Assumption until decided |
 |---|---|---|
-| 1 | Running PostgreSQL ×2, Valkey and RabbitMQ locally | **Decided:** `compose.yaml` runs the infrastructure only (the services run on the host); `scripts/database/liquibase.sh` migrates both databases, with test records |
+| 1 | Running PostgreSQL ×2, Redis and RabbitMQ locally | **Decided:** `compose.yaml` runs the infrastructure only (the services run on the host); `scripts/database/liquibase.sh` migrates both databases, with test records |
 | 2 | Time zones | Training periods, active days and streaks use UTC. Real members expect their own time zone; that needs a member time zone, which needs Identity |
 | 3 | Achievements vs records | Achievements are final; personal records are recalculated and can go down |
 | 4 | Goal grace period | One day after the goal period ends, so late recordings still count |
@@ -957,15 +957,14 @@ The services speak OpenTelemetry only; the Grafana stack stores, presents and al
 service --OTLP/HTTP + Basic Auth--> Grafana Alloy --traces--> Tempo ----span metrics, service graph--+
                                                   --logs----> Loki                                  |
                                                   --metrics-> Prometheus <---------------------------+
-RabbitMQ (Prometheus plugin), Valkey (INFO) <--scraped by Alloy; their container logs --> Alloy --> Loki
+RabbitMQ (Prometheus plugin), Redis (INFO) <--scraped by Alloy; their container logs --> Alloy --> Loki
 k6 (load tests, section 17) --Prometheus remote write, Compose network only--> Alloy --> Prometheus
                                        Grafana: data sources, dashboards and alert rules, provisioned
 ```
 
 ### 15.1 Instrumentation
 
-- `libs/telemetry/src/instrumentation.ts` starts the SDK before the service: `node --import ./dist/apps/<service>/instrumentation.js` (the `start:dev:<service>` and `start:prod:<service>` scripts; `rspack.config.js` builds it). It registers the ES module loader hook (`@nestjs/*` v12 are ES modules), then the automatic instrumentations of what the services use: HTTP, Express, Nest, GraphQL, pg, amqplib, undici and the Node.js runtime. Database and outbound HTTP spans only exist inside a trace, so the outbox relay's polling isn't one; the health probes aren't traced.
-- **Valkey:** no instrumentation of the Node SDK covers GLIDE, so its own OpenTelemetry does (`valkey-client.ts`): its Rust core times each command and exports the spans and its few metrics (`glide.timeout_errors`, `glide.retry_attempts`...) to the same `OTEL_EXPORTER_OTLP_ENDPOINT`, with the same Basic Auth (`OTEL_EXPORTER_OTLP_HEADERS`, which the core reads itself), as children of the active span. It samples by its own share, `VALKEY_TRACE_SAMPLE_PERCENTAGE` (5 by default, 1 to 5 in production as GLIDE recommends; 100 locally), not by the SDK's sampler, and also traces commands outside a trace (the readiness probe's round trip). It honours `OTEL_SDK_DISABLED` and `OTEL_TRACES_EXPORTER`/`OTEL_METRICS_EXPORTER=none`.
+- `libs/telemetry/src/instrumentation.ts` starts the SDK before the service: `node --import ./dist/apps/<service>/instrumentation.js` (the `start:dev:<service>` and `start:prod:<service>` scripts; `rspack.config.js` builds it). It registers the ES module loader hook (`@nestjs/*` v12 are ES modules), then the automatic instrumentations of what the services use: HTTP, Express, Nest, GraphQL, pg, Redis, amqplib, undici and the Node.js runtime. Database, Redis and outbound HTTP spans only exist inside a trace, so the outbox relay's polling isn't one; the health probes aren't traced.
 - Everything goes over OTLP/HTTP, with W3C trace context and baggage. Metrics are cumulative (Prometheus'), every 10 s, with the stable HTTP conventions (`http.server.request.duration`, by `http.route`, method and status). The standard variables configure the rest: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SDK_DISABLED`; the service name defaults to the folder of `main.js`.
 - **The version:** `service.version`, so that during a rolling deploy the old and the new version's metrics, traces and logs can be told apart. A deployment names it (`OTEL_RESOURCE_ATTRIBUTES=service.version=<image tag>`); otherwise it's the build's, `git describe --tags --always --dirty`, which `rspack.config.js` writes into `instrumentation.js` (`7e309c2-dirty`: a commit, with uncommitted changes).
 - **GraphQL:** every request is `POST /graphql` to the HTTP metric, so `GraphqlOperationMetricsPlugin` (an Apollo plugin, `@Plugin()`) records `graphql.server.operation.duration` per operation: by `graphql.operation.type` and `graphql.root_fields` (the schema bounds them; operation names are the client's, without limit), and `error.type` when it fails. Introspection isn't recorded. The GraphQL instrumentation adds the spans (`allowValues: false`: argument values in the query text become `*`).
@@ -982,8 +981,8 @@ k6 (load tests, section 17) --Prometheus remote write, Compose network only--> A
 Alloy (`infrastructure/alloy/config.alloy`) is the one collector. The services only see its OTLP/HTTP port, which requires Basic Auth: a bcrypt htpasswd file (gitignored) from `scripts/observability/telemetry-credentials.sh`, which also writes the matching `OTEL_EXPORTER_OTLP_HEADERS` into each service's `.env`. Without the file, Alloy doesn't start; a request without the right credentials gets 401. Alloy copies the service, its version and the environment onto every metric (`service_name`, `service_version`, `deployment_environment_name`), sends traces to Tempo, logs to Loki's OTLP endpoint (trace id, span id and flow id become structured metadata: `trace_id`, `span_id`, `session_id`) and metrics to Prometheus (remote write). It also scrapes, with nothing to install on them:
 
 - **RabbitMQ:** its built-in Prometheus plugin, per queue (`/metrics/detailed`: `rabbitmq_detailed_queue_messages`, `_ready`, `_unacked`, `_consumers`, `_messages_acked_total`...) and the node (`/metrics`);
-- **Valkey:** its own `INFO`, through Alloy's embedded Redis exporter (Valkey answers the same `INFO`; the metrics keep the exporter's `redis_` names: `redis_up`, `redis_memory_used_bytes`, `redis_keyspace_hits_total`, `redis_evicted_keys_total`...);
-- **their containers' logs**, through the Docker API, as `service_name` `rabbitmq` and `valkey`.
+- **Redis:** its own `INFO`, through Alloy's embedded exporter (`redis_up`, `redis_memory_used_bytes`, `redis_keyspace_hits_total`, `redis_evicted_keys_total`...);
+- **their containers' logs**, through the Docker API, as `service_name` `rabbitmq` and `redis`.
 
 It also receives **k6's metrics** during load tests (section 17): Prometheus remote write on port 9091 (`prometheus.receive_http`), forwarded to Prometheus as they are (`k6_*`, by `testid`). That port is only on the Compose network, where the `k6` service runs, like Prometheus' own receiver: k6 isn't a service of the platform, and nothing outside Compose can write there.
 
@@ -994,7 +993,7 @@ Only Alloy's OTLP port (and its UI) and Grafana are published, on 127.0.0.1; Lok
 Grafana (`http://localhost:3000`, `admin` and `GRAFANA_ADMIN_PASSWORD` from `.env`) gets everything from `infrastructure/grafana/`, provisioned: change it there, not in Grafana.
 
 - **Data sources**, linked both ways: a log's `trace_id` opens its trace in Tempo, a span opens its logs in Loki, Tempo's service map reads Prometheus.
-- **Fitness platform** dashboard (`env`, `service`, `version`, `interface` and `flow` variables): the alert rules' state; **a row per service** (repeated on the `service` variable, so Workout Tracking, Training Progress and Billing each have their own): requests per minute by version, 4xx and 5xx by status, HTTP and database p95 and p99; **Billing**: Stripe's events by type and outcome, webhooks refused by their signature check, Billing's integration events published by topic, Stripe API calls p95 and p99; HTTP requests per minute by service (and version) and endpoint, 5xx errors and p95 duration by version, the busiest endpoints; GraphQL operations per minute by type and root fields, failures by error code and p95 duration; latency at p95 and p99: HTTP requests by service, GraphQL operations, database operations by operation, outgoing HTTP calls by host, message handling (Tempo's span metrics, the 10 slowest consumer and internal spans), calls between services (Tempo's service graph), Valkey commands and garbage collection pauses; rate-limited requests by handler, timeouts by entrypoint, rejected and failed responses, and requests waiting for a database connection, with the faults of section 16 as annotations; the read cache's reads by result, loads from PostgreSQL and database operations per second, with the load tests of section 17 as annotations; Tempo's service graph and recent traces; a flow's traces and logs; database duration and connections, event loop delay and utilization, heap; RabbitMQ dead letters, messages, ready and unacknowledged, acknowledgements per minute and consumers per queue, node memory; Valkey up, memory and maxmemory, hit ratio, commands per second, clients, evictions and expirations; the error and warning logs of the services, RabbitMQ and Valkey.
+- **Fitness platform** dashboard (`env`, `service`, `version`, `interface` and `flow` variables): the alert rules' state; **a row per service** (repeated on the `service` variable, so Workout Tracking, Training Progress and Billing each have their own): requests per minute by version, 4xx and 5xx by status, HTTP and database p95 and p99; **Billing**: Stripe's events by type and outcome, webhooks refused by their signature check, Billing's integration events published by topic, Stripe API calls p95 and p99; HTTP requests per minute by service (and version) and endpoint, 5xx errors and p95 duration by version, the busiest endpoints; GraphQL operations per minute by type and root fields, failures by error code and p95 duration; latency at p95 and p99: HTTP requests by service, GraphQL operations, database operations by operation, outgoing HTTP calls by host, message handling (Tempo's span metrics, the 10 slowest consumer and internal spans), calls between services (Tempo's service graph), Redis commands and garbage collection pauses; rate-limited requests by handler, timeouts by entrypoint, rejected and failed responses, and requests waiting for a database connection, with the faults of section 16 as annotations; the read cache's reads by result, loads from PostgreSQL and database operations per second, with the load tests of section 17 as annotations; Tempo's service graph and recent traces; a flow's traces and logs; database duration and connections, event loop delay and utilization, heap; RabbitMQ dead letters, messages, ready and unacknowledged, acknowledgements per minute and consumers per queue, node memory; Redis up, memory and maxmemory, hit ratio, commands per second, clients, evictions and expirations; the error and warning logs of the services, RabbitMQ and Redis.
 - **k6 Prometheus** dashboard: Grafana Labs' own for k6 ([19665](https://grafana.com/grafana/dashboards/19665-k6-prometheus/), revision 3), changed only for provisioning (a fixed uid, `k6-prometheus`, the Prometheus data source by default, the links, the load tests' annotations). A load test's side of the run, by **Test ID** (`testid`, which `load-tests/k6.sh` sets to `<test>-<UTC time>`): virtual users, request rate and failures, latency by statistic (p95, p99, min, max, average, median) and by request name, checks. The two dashboards link to each other.
 - **Alert rules** (`provisioning/alerting/alert-rules.yaml`), evaluated every minute on Prometheus:
 
@@ -1004,9 +1003,9 @@ Grafana (`http://localhost:3000`, `admin` and `GRAFANA_ADMIN_PASSWORD` from `.en
 | GraphQL operation over 20 per minute | `increase(graphql_server_operation_duration_seconds_count[1m])` by operation type and root fields | More than 20 in the last minute |
 | RabbitMQ messages not consumed for 5 minutes | Messages throughout 5 minutes (`min_over_time`), and in them no acknowledgement (`increase(..._messages_acked_total) == 0`) or no consumer, or no ack counter at all | A stuck or missing consumer, or dead letters waiting: an incident |
 | RabbitMQ queue over 5 messages | `max_over_time(rabbitmq_detailed_queue_messages[1m])` by queue | More than 5 (ready and unacknowledged) |
-| Valkey unreachable | `redis_up` | Down for a minute, or no data (Alloy isn't scraping) |
-| Valkey memory over 90% of maxmemory | `redis_memory_used_bytes / redis_memory_max_bytes`, only with a maxmemory | Over 90% for 5 minutes |
-| Valkey evicting keys | `increase(redis_evicted_keys_total[5m])` | Any eviction in 5 minutes |
+| Redis unreachable | `redis_up` | Down for a minute, or no data (Alloy isn't scraping) |
+| Redis memory over 90% of maxmemory | `redis_memory_used_bytes / redis_memory_max_bytes`, only with a maxmemory | Over 90% for 5 minutes |
+| Redis evicting keys | `increase(redis_evicted_keys_total[5m])` | Any eviction in 5 minutes |
 | Requests rejected by the rate limit | `increase(rate_limit_rejected_requests_total[5m])` by service and handler | Any rejection in 5 minutes (section 16.1) |
 | Queries timing out | `increase(resilience_events_total{resilience_event="timeout"}[5m])` by service and entrypoint | Any timeout in 5 minutes (section 16.2) |
 | HTTP server errors over 5% of requests | 5xx over all of `http_server_request_duration_seconds_count`, in 5 minutes, by service | Over 5% for a minute |
@@ -1026,7 +1025,7 @@ The rules notify Grafana's default contact point; add one (Slack, e-mail with SM
 
 ## 16. Rate limit, timeouts and faults
 
-The services limit how many requests one caller sends, and how long a query may take. Locally, Toxiproxy slows down or cuts any connection of a service to its PostgreSQL, Valkey or RabbitMQ, so both, and every other failure, can be triggered on purpose and watched in Grafana (section 15).
+The services limit how many requests one caller sends, and how long a query may take. Locally, Toxiproxy slows down or cuts any connection of a service to its PostgreSQL, Redis or RabbitMQ, so both, and every other failure, can be triggered on purpose and watched in Grafana (section 15).
 
 ### 16.1 Rate limit
 
@@ -1061,7 +1060,7 @@ Compose's `faults` profile runs [Toxiproxy](https://github.com/Shopify/toxiproxy
 | `workout-tracking-db` | 25433 | `workout-tracking-db:5432` |
 | `workout-tracking-rabbitmq` | 25672 | `rabbitmq:5672` |
 | `training-progress-db` | 25434 | `training-progress-db:5432` |
-| `training-progress-valkey` | 26379 | `valkey:6379` |
+| `training-progress-redis` | 26379 | `redis:6379` |
 | `training-progress-rabbitmq` | 25673 | `rabbitmq:5672` |
 | `billing-db` | 25435 | `billing-db:5432` |
 | `billing-rabbitmq` | 25674 | `rabbitmq:5672` |
@@ -1069,7 +1068,7 @@ Compose's `faults` profile runs [Toxiproxy](https://github.com/Shopify/toxiproxy
 - `docker compose --profile faults up -d --wait` starts it; its API and the proxies listen on 127.0.0.1 only.
 - `scripts/faults/start-through-toxiproxy.sh <service>` starts the service like `pnpm start:dev:<service>`, with the URLs of its `.env` on the proxies' ports (the shell's variables win over `.env`). Stop the usual `start:dev` first: two watchers would build into the same `dist/`.
 - `scripts/faults/fault.sh` injects and clears the faults: `latency <proxy> <ms> [jitter]` (every answer arrives later), `hang <proxy>` (no answer, the connection stays open), `down` and `up <proxy>` (connections closed and refused), `clear [<proxy>]`, `list`. Each change is also a Grafana annotation, tagged `fault`, which the dashboard shows on every panel.
-- Local only: the services don't know about Toxiproxy, and no other environment runs it. Alloy scrapes RabbitMQ and Valkey directly, not through the proxies, so `redis_up` stays 1 while `training-progress-valkey` is down.
+- Local only: the services don't know about Toxiproxy, and no other environment runs it. Alloy scrapes RabbitMQ and Redis directly, not through the proxies, so `redis_up` stays 1 while `training-progress-redis` is down.
 - A new PostgreSQL connection takes several roundtrips: through 1.5 s of latency, about 8 s. A pooled connection pays the latency once per query.
 
 ### 16.4 Scenarios, and what Grafana shows
@@ -1082,7 +1081,7 @@ Start the service with `scripts/faults/start-through-toxiproxy.sh`, then cause t
 | A slow database | `fault.sh latency training-progress-db 4000`, then query `trainingGoals` | `TIMEOUT` after `QUERY_TIMEOUT_MS`; the queries go on in the background | *Timeouts*, *Requests waiting for a database connection*, database p95; long `pg` spans in Tempo; alert *Queries timing out* |
 | A database that stops answering | `fault.sh hang training-progress-db`, then a few queries and a mutation | Queries fail with `TIMEOUT`, and their connections stay taken. New connections can't finish their handshake, so whatever needs one waits 5 s (`connectionTimeoutMillis`) and fails: a mutation with `INTERNAL_SERVER_ERROR`. Readiness `down` (503) | *Timeouts*, *Requests waiting for a database connection*; alerts *Queries timing out*, *GraphQL operations failing on the server* |
 | A database that is down | `fault.sh down workout-tracking-db`, then `GET /internal/v1/workouts/<id>` | Connections refused: 500 right away; readiness `down` (503) | *Rejected and failed responses*, *Errors and warnings* logs; alert *HTTP server errors over 5% of requests* |
-| A slow or dead cache | `fault.sh hang training-progress-valkey`, then query `streak` | `ReadCache` gives up after 250 ms and reads PostgreSQL: answers stay right, about 250 ms slower; a warning every 10 seconds | Duration p95, *Errors and warnings* logs. The Valkey alerts don't fire: Alloy reads Valkey directly |
+| A slow or dead cache | `fault.sh hang training-progress-redis`, then query `streak` | `ReadCache` gives up after 250 ms and reads PostgreSQL: answers stay right, about 250 ms slower; a warning every 10 seconds | Duration p95, *Errors and warnings* logs. The Redis alerts don't fire: Alloy reads Redis directly |
 | The producer cut from RabbitMQ | `fault.sh down workout-tracking-rabbitmq`, then record a workout | Still 201: the event waits in the outbox, and the relay retries (20 attempts over 30 to 60 minutes); delivered after `fault.sh up` | Nothing in RabbitMQ's panels; `GET /internal/v1/admin/outbox/stats` (no outbox metric yet, section 16.5) |
 | The consumer cut from RabbitMQ | `fault.sh down training-progress-rabbitmq`, then record workouts | Messages wait in the queue; readiness `degraded` | *Messages per queue*; alerts *RabbitMQ queue with 5 or more messages*, then *messages not consumed for 5 minutes* |
 
@@ -1091,9 +1090,9 @@ Start the service with `scripts/faults/start-through-toxiproxy.sh`, then cause t
 - **A circuit breaker for PostgreSQL** (a `database` preset of `@nestjs/resilience`): once most queries fail or time out, answer 503 at once instead of piling more queries on a pool that is already full. `resilience_events_total{resilience_event="circuit-open"}` already counts its transitions: alert on them.
 - **Stop the timed-out queries:** pg's client-side `query_timeout` at `QUERY_TIMEOUT_MS`, so a timed-out query gives its connection back; a `statement_timeout` for Workout Tracking too.
 - **An outbox metric** (messages waiting, age of the oldest) and its alert: today a producer cut from RabbitMQ only shows in the outbox stats route.
-- **An alert on the cache's fallback:** `read_cache_reads_total{read_cache_result="unavailable"}` (section 8.1) counts the reads Valkey didn't answer, the cache as the service sees it, not only as Alloy does; no rule fires on it yet.
+- **An alert on the cache's fallback:** `read_cache_reads_total{read_cache_result="unavailable"}` (section 8.1) counts the reads Redis didn't answer, the cache as the service sees it, not only as Alloy does; no rule fires on it yet.
 - **An alert for a service that stops reporting:** its runtime metrics, sent every 10 s, are missing.
-- **A shared rate limit**, in Valkey (the community storage of the rate limiting docs) or at the ingress, once there are several instances.
+- **A shared rate limit**, in Redis (the community storage of the rate limiting docs) or at the ingress, once there are several instances.
 
 ## 17. Load tests (k6)
 

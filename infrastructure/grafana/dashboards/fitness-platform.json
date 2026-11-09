@@ -6,7 +6,7 @@
   ],
   "timezone": "browser",
   "editable": false,
-  "description": "Workout Tracking, Training Progress and Billing (OpenTelemetry via Alloy), RabbitMQ and Valkey (scraped by Alloy), traces in Tempo, logs in Loki, and the alert rules. Provisioned from infrastructure/grafana/dashboards/.",
+  "description": "Workout Tracking, Training Progress and Billing (OpenTelemetry via Alloy), RabbitMQ and Redis (scraped by Alloy), traces in Tempo, logs in Loki, and the alert rules. Provisioned from infrastructure/grafana/dashboards/.",
   "schemaVersion": 41,
   "version": 1,
   "time": {
@@ -1361,8 +1361,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Valkey command latency p99, by command",
-      "description": "Valkey's own latency per command, from INFO (microseconds).",
+      "title": "Redis command latency p99, by command",
+      "description": "Redis' own latency per command, from INFO (microseconds).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1685,7 +1685,7 @@
     {
       "type": "timeseries",
       "title": "Read cache: reads per minute, by read model and result",
-      "description": "How the cached read models were answered (read_cache_reads_total): hit (from Valkey), load (from PostgreSQL, after a miss), wait (another caller's load, under the load lock), off (READ_CACHE=off), unavailable (Valkey down).",
+      "description": "How the cached read models were answered (read_cache_reads_total): hit (from Redis), load (from PostgreSQL, after a miss), wait (another caller's load, under the load lock), off (READ_CACHE=off), unavailable (Redis down).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2540,7 +2540,7 @@
     {
       "type": "row",
       "id": 33,
-      "title": "Valkey (scraped by Alloy)",
+      "title": "Redis (scraped by Alloy)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -2552,7 +2552,7 @@
     },
     {
       "type": "stat",
-      "title": "Valkey",
+      "title": "Redis",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2887,7 +2887,7 @@
     },
     {
       "type": "logs",
-      "title": "Errors and warnings: the services, RabbitMQ and Valkey",
+      "title": "Errors and warnings: the services, RabbitMQ and Redis",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -2899,7 +2899,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=~\"$service|rabbitmq|valkey\"} | detected_level=~\"error|warn\" | interface=~\"$interface\""
+          "expr": "{service_name=~\"$service|rabbitmq|redis\"} | detected_level=~\"error|warn\" | interface=~\"$interface\""
         }
       ],
       "options": {
@@ -2915,7 +2915,7 @@
         "y": 170
       },
       "id": 41,
-      "description": "Errors and warnings in the interface picked above. RabbitMQ's and Valkey's own logs have no interface: they show with All only."
+      "description": "Errors and warnings in the interface picked above. RabbitMQ's and Redis' own logs have no interface: they show with All only."
     }
   ],
   "annotations": {

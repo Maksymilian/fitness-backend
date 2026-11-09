@@ -1,26 +1,25 @@
 import type { ConfigService } from '@nestjs/config';
 import { LocksStorage } from '@nestjs/locks';
 import { lockStoreContract } from '@nestjs/locks/testing';
-import { type StartedValkeyContainer, ValkeyContainer } from '@testcontainers/valkey';
+import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
 import type { Environment } from '../config/environment.js';
-import { ValkeyLockStore } from './valkey-lock-store.js';
+import { RedisLockStore } from './redis-lock-store.js';
 
 /**
- * `@nestjs/locks`' LockStore contract, the races included, against a real Valkey (Testcontainers,
+ * `@nestjs/locks`' LockStore contract, the races included, against a real Redis (Testcontainers,
  * the image compose.yaml also runs). The expiry cases wait in real time (about 25 seconds): the
- * store expires locks on Valkey's clock.
+ * store expires locks on Redis's clock.
  */
-describe('ValkeyLockStore, the LockStore contract', () => {
-  let container: StartedValkeyContainer;
-  let pool: ValkeyLockStore[];
+describe('RedisLockStore, the LockStore contract', () => {
+  let container: StartedRedisContainer;
+  let pool: RedisLockStore[];
   let next = 0;
 
   beforeAll(async () => {
-    container = await new ValkeyContainer('valkey/valkey:9-alpine').start();
-    const settings: Record<string, unknown> = { VALKEY_URL: container.getConnectionUrl(), VALKEY_TRACE_SAMPLE_PERCENTAGE: 0 };
-    const config = { get: (name: string) => settings[name] } as unknown as ConfigService<Environment, true>;
+    container = await new RedisContainer('redis:8-alpine').start();
+    const config = { get: () => container.getConnectionUrl() } as unknown as ConfigService<Environment, true>;
     // Several connections, so the calls really overlap.
-    pool = Array.from({ length: 8 }, () => new ValkeyLockStore(config, new LocksStorage()));
+    pool = Array.from({ length: 8 }, () => new RedisLockStore(config, new LocksStorage()));
     for (const store of pool) {
       store.onModuleInit();
       await store.connected();

@@ -3,7 +3,7 @@ import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
 import { PostgresHealthIndicator } from './postgres.health.js';
 import { RabbitMqHealthIndicator } from './rabbitmq.health.js';
-import { ValkeyHealthIndicator } from './valkey.health.js';
+import { RedisHealthIndicator } from './redis.health.js';
 
 /** Kubernetes' probes aren't callers: no rate limit, or a burst of requests would take the instance out. */
 @SkipThrottle()
@@ -12,7 +12,7 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly postgres: PostgresHealthIndicator,
-    private readonly valkey: ValkeyHealthIndicator,
+    private readonly redis: RedisHealthIndicator,
     private readonly rabbitMq: RabbitMqHealthIndicator,
   ) {}
 
@@ -23,13 +23,13 @@ export class HealthController {
     return this.health.check([]);
   }
 
-  /** Ready to take traffic: `down` without PostgreSQL, `degraded` without Valkey or RabbitMQ. */
+  /** Ready to take traffic: `down` without PostgreSQL, `degraded` without Redis or RabbitMQ. */
   @Get('ready')
   @HealthCheck()
   ready() {
     return this.health.check([
       () => this.postgres.isHealthy('postgres'),
-      () => this.valkey.isReachable('valkey'),
+      () => this.redis.isReachable('redis'),
       () => this.rabbitMq.isReachable('rabbitmq'),
     ]);
   }

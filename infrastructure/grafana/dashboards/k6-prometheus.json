@@ -47,7 +47,7 @@
       "tags": [],
       "targetBlank": false,
       "title": "Fitness platform",
-      "tooltip": "The services, RabbitMQ and Valkey during the run",
+      "tooltip": "The services, RabbitMQ and Redis during the run",
       "type": "link",
       "url": "/d/fitness-platform"
     },

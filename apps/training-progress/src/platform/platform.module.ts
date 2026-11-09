@@ -15,9 +15,8 @@ import { minutes, ThrottlerModule } from '@nestjs/throttler';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { CacheInvalidationHandler } from './cache/cache-invalidation.handler.js';
 import { ReadCache } from './cache/read-cache.js';
-import { createValkeyClient } from './cache/valkey-client.js';
-import { ValkeyLockStore } from './cache/valkey-lock-store.js';
-import { valkeyKeyv } from './cache/valkey-store.js';
+import { RedisLockStore } from './cache/redis-lock-store.js';
+import { redisStore } from './cache/redis-store.js';
 import { type Environment, validateEnvironment } from './config/environment.js';
 import { type Database, withPoolErrorsLogged } from './database/database.js';
 import { Transactions } from './database/transactions.js';
@@ -37,7 +36,7 @@ import { TelegramModule } from './telegram/telegram.module.js';
 
 /**
  * Technical plumbing of the service: configuration, the database, the outbox (domain events to
- * the policies, the published language to Notifications, all in-process), Valkey (the read cache
+ * the policies, the published language to Notifications, all in-process), Redis (the read cache
  * and its locks), GraphQL, scheduling, RabbitMQ topology, the rate limit and timeouts, validation,
  * error mapping, health checks, the Telegram bot. No domain concepts.
  */
@@ -80,12 +79,10 @@ import { TelegramModule } from './telegram/telegram.module.js';
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
-      // Valkey only: an in-memory tier couldn't be invalidated from another instance.
-      useFactory: async (config: ConfigService<Environment, true>) => ({
-        stores: [valkeyKeyv(await createValkeyClient(config.get('VALKEY_URL', { infer: true }), config.get('VALKEY_TRACE_SAMPLE_PERCENTAGE', { infer: true })))],
-      }),
+      // Redis only: an in-memory tier couldn't be invalidated from another instance.
+      useFactory: (config: ConfigService<Environment, true>) => ({ stores: [redisStore(config.get('REDIS_URL', { infer: true }))] }),
     }),
-    // Locks every instance shares, in Valkey (ValkeyLockStore): the read cache's load lock (section 8.1).
+    // Locks every instance shares, in Redis (RedisLockStore): the read cache's load lock (section 8.1).
     LocksModule.forRoot(),
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
@@ -133,7 +130,7 @@ import { TelegramModule } from './telegram/telegram.module.js';
     { provide: DomainEventPublisher, useClass: OutboxDomainEventPublisher },
     Transactions,
     ReadCache,
-    ValkeyLockStore,
+    RedisLockStore,
     CacheInvalidationHandler,
     DeadLetterTopology,
     // Picked up by Apollo (@Plugin()): GraphQL's per-operation metric.

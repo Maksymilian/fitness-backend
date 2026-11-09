@@ -12,7 +12,7 @@ cp apps/workout-tracking/.env.example apps/workout-tracking/.env
 cp apps/training-progress/.env.example apps/training-progress/.env
 cp apps/billing/.env.example apps/billing/.env
 
-# PostgreSQL x3, Valkey and RabbitMQ
+# PostgreSQL x3, Redis and RabbitMQ
 docker compose up -d --wait
 
 # the databases' schemas, with test records
@@ -111,7 +111,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs all of these on every push to `
 
 ## Operations
 
-- Health: `GET /health/live` and `GET /health/ready` on both services. Readiness is `down` without the service's PostgreSQL, and `degraded` (still 200) without RabbitMQ or Valkey.
+- Health: `GET /health/live` and `GET /health/ready` on both services. Readiness is `down` without the service's PostgreSQL, and `degraded` (still 200) without RabbitMQ or Redis.
 - Outbox: `GET /internal/v1/admin/outbox/stats` and `/dead-letters` on Workout Tracking, `/internal/admin/outbox/...` on Training Progress, with the `x-admin-token` header (`ADMIN_TOKEN`). Dead letters can be requeued with `POST .../dead-letters/:id/requeue`.
 - RabbitMQ dead letters (messages that aren't structured-mode CloudEvents, invalid integration events, or ones that failed 5 deliveries): queue `training-progress.workout-tracking.dlq`. Integration events travel as [CloudEvents](https://cloudevents.io) 1.0 (section 5.4 of `docs/architecture.md`).
 - Schedule triggers (section 7.5 of `docs/architecture.md`): Kubernetes CronJobs publish them, and one Training Progress instance handles each. Run one by hand, against the local RabbitMQ or another with `RABBITMQ_URL`:
@@ -127,7 +127,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs all of these on every push to `
 
 ### Observability: OpenTelemetry and the Grafana stack
 
-The services send traces, metrics and logs over OTLP to Grafana Alloy, which requires Basic Auth and sends them to Tempo, Prometheus and Loki; Alloy also scrapes RabbitMQ and Valkey and collects their logs. Grafana shows them, with the **Fitness platform** dashboard and the alert rules (section 15 of `docs/architecture.md`).
+The services send traces, metrics and logs over OTLP to Grafana Alloy, which requires Basic Auth and sends them to Tempo, Prometheus and Loki; Alloy also scrapes RabbitMQ and Redis and collects their logs. Grafana shows them, with the **Fitness platform** dashboard and the alert rules (section 15 of `docs/architecture.md`).
 
 ```bash
 cp .env.example .env                                    # GRAFANA_ADMIN_PASSWORD
@@ -142,7 +142,7 @@ Grafana: http://localhost:3000 (`admin`, `GRAFANA_ADMIN_PASSWORD`) > Dashboards 
 
 ### Rate limit, timeouts and faults
 
-With `RATE_LIMIT=on`, each service rejects a caller past `RATE_LIMIT_PER_MINUTE` requests a minute (429, with `TOO_MANY_REQUESTS` over GraphQL), and cuts a query after `QUERY_TIMEOUT_MS` (504, or `TIMEOUT`). Toxiproxy slows down or cuts a service's connections to PostgreSQL, Valkey and RabbitMQ, to see them, and other failures, in Grafana (section 16 of `docs/architecture.md`, with the scenarios to try):
+With `RATE_LIMIT=on`, each service rejects a caller past `RATE_LIMIT_PER_MINUTE` requests a minute (429, with `TOO_MANY_REQUESTS` over GraphQL), and cuts a query after `QUERY_TIMEOUT_MS` (504, or `TIMEOUT`). Toxiproxy slows down or cuts a service's connections to PostgreSQL, Redis and RabbitMQ, to see them, and other failures, in Grafana (section 16 of `docs/architecture.md`, with the scenarios to try):
 
 ```bash
 docker compose --profile faults --profile observability up -d --wait   # + Toxiproxy (API on localhost:8474)

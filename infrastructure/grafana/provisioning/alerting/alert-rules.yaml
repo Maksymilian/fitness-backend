@@ -1,11 +1,12 @@
 # Grafana alert rules (docs/architecture.md, section 15.4), provisioned: change them here, not in Grafana.
+# deleteRules: the valkey-* rules a Valkey build provisioned, replaced by the redis-* ones again.
 # Evaluated every minute on Prometheus.
 {
   "apiVersion": 1,
   "deleteRules": [
-    { "orgId": 1, "uid": "redis-unreachable" },
-    { "orgId": 1, "uid": "redis-memory-near-limit" },
-    { "orgId": 1, "uid": "redis-evictions" }
+    { "orgId": 1, "uid": "valkey-unreachable" },
+    { "orgId": 1, "uid": "valkey-memory-near-limit" },
+    { "orgId": 1, "uid": "valkey-evictions" }
   ],
   "groups": [
     {
@@ -270,8 +271,8 @@
           ]
         },
         {
-          "uid": "valkey-unreachable",
-          "title": "Valkey unreachable",
+          "uid": "redis-unreachable",
+          "title": "Redis unreachable",
           "condition": "C",
           "for": "1m",
           "noDataState": "Alerting",
@@ -281,8 +282,8 @@
             "team": "fitness-platform"
           },
           "annotations": {
-            "summary": "Valkey {{ $labels.instance }} unreachable",
-            "description": "Alloy can't read Valkey (or, without data, Alloy itself isn't scraping). Training Progress keeps serving queries without its cache, slower."
+            "summary": "Redis {{ $labels.instance }} unreachable",
+            "description": "Alloy can't read Redis (or, without data, Alloy itself isn't scraping). Training Progress keeps serving queries without its cache, slower."
           },
           "data": [
             {
@@ -321,8 +322,8 @@
           ]
         },
         {
-          "uid": "valkey-memory-near-limit",
-          "title": "Valkey memory over 90% of maxmemory",
+          "uid": "redis-memory-near-limit",
+          "title": "Redis memory over 90% of maxmemory",
           "condition": "C",
           "for": "5m",
           "noDataState": "OK",
@@ -332,8 +333,8 @@
             "team": "fitness-platform"
           },
           "annotations": {
-            "summary": "Valkey {{ $labels.instance }} over 90% of maxmemory",
-            "description": "It uses {{ $values.A.Value | humanizePercentage }} of maxmemory: it starts evicting cached read models soon. Without maxmemory (Valkey's default, 0: no limit) there is no ratio, and this rule stays silent."
+            "summary": "Redis {{ $labels.instance }} over 90% of maxmemory",
+            "description": "It uses {{ $values.A.Value | humanizePercentage }} of maxmemory: it starts evicting cached read models soon. Without maxmemory (Redis' default, 0: no limit) there is no ratio, and this rule stays silent."
           },
           "data": [
             {
@@ -372,8 +373,8 @@
           ]
         },
         {
-          "uid": "valkey-evictions",
-          "title": "Valkey evicting keys",
+          "uid": "redis-evictions",
+          "title": "Redis evicting keys",
           "condition": "C",
           "for": "0s",
           "noDataState": "OK",
@@ -383,7 +384,7 @@
             "team": "fitness-platform"
           },
           "annotations": {
-            "summary": "Valkey {{ $labels.instance }} is evicting keys",
+            "summary": "Redis {{ $labels.instance }} is evicting keys",
             "description": "{{ $values.A.Value | printf \"%.0f\" }} keys evicted in the last 5 minutes because of maxmemory: cached read models disappear early, and queries go to PostgreSQL."
           },
           "data": [
