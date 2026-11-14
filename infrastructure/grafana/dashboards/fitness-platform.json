@@ -2873,6 +2873,194 @@
       "id": 39
     },
     {
+      "id": 71,
+      "type": "table",
+      "title": "Slow log: the 5 slowest commands (SLOWLOG GET)",
+      "description": "Redis' own slow log, read through the Redis data source: commands slower than slowlog-log-slower-than (1 ms by default), the 5 slowest of the last 128 kept (slowlog-max-len). Like Redis Insight's Slow Log. Reset with SLOWLOG RESET.",
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis"
+          },
+          "type": "command",
+          "query": "",
+          "command": "slowlogGet",
+          "size": 128
+        }
+      ],
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Duration",
+                "desc": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "limit",
+          "options": {
+            "limitField": 5
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "µs"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Id"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 169
+      }
+    },
+    {
+      "id": 72,
+      "type": "table",
+      "title": "The 50 largest keys, by memory (MEMORY USAGE)",
+      "description": "Each key's memory in bytes, from Alloy's Redis exporter (check_key_groups, one group per key), refreshed every 15 s scrape. \"overflow\" sums the keys beyond the first 1000.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(50, max by (db, key_group) (redis_key_group_memory_usage_bytes))",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "key_group": "Key",
+              "db": "DB",
+              "Value": "Memory"
+            },
+            "indexByName": {
+              "key_group": 0,
+              "db": 1,
+              "Value": 2
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Memory",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DB"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 178
+      }
+    },
+    {
       "type": "row",
       "id": 40,
       "title": "Logs (Loki)",
@@ -2881,7 +3069,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 169
+        "y": 190
       },
       "panels": []
     },
@@ -2912,7 +3100,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 170
+        "y": 191
       },
       "id": 41,
       "description": "Errors and warnings in the interface picked above. RabbitMQ's and Redis' own logs have no interface: they show with All only."

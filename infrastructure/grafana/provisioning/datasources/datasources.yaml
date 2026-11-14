@@ -29,6 +29,12 @@ datasources:
         enabled: true
       lokiSearch:
         datasourceUid: loki
+  # Redis itself, for its slow log (SLOWLOG GET); its metrics come from Alloy's exporter, in Prometheus.
+  - name: Redis
+    uid: redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
   - name: Loki
     uid: loki
     type: loki

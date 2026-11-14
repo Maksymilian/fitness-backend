@@ -91,6 +91,13 @@ prometheus.scrape "rabbitmq_node" {
 
 prometheus.exporter.redis "redis" {
   redis_addr = "redis:6379"
+
+  // Every key its own group (Lua pattern capturing the whole name), so each key gets
+  // redis_key_group_memory_usage_bytes{db, key_group}: the dashboard's 50 largest keys. SCANs the
+  // keyspace and runs MEMORY USAGE per key at each scrape: fine locally, not on a big production
+  // Redis. Keys beyond max_distinct_key_groups are summed into the "overflow" group.
+  check_key_groups        = ["^(.*)$"]
+  max_distinct_key_groups = 1000
 }
 
 prometheus.scrape "redis" {
