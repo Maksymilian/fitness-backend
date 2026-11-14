@@ -17,7 +17,8 @@ export function redisStore(url: string): Keyv {
       disableOfflineQueue: true,
       socket: { connectTimeout: 1000, reconnectStrategy: (retries: number) => Math.min(retries * 200, 5000) },
     },
-    { throwOnErrors: true, throwOnConnectError: false },
+    // UNLINK, never DEL, when the invalidation handler forgets keys: Redis frees the memory in the background.
+    { throwOnErrors: true, throwOnConnectError: false, useUnlink: true },
   );
   let lastWarning = 0;
   const warn = (error: unknown) => {
