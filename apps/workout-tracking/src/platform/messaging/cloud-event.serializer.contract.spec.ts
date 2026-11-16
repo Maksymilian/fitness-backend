@@ -62,13 +62,15 @@ describe('CloudEventSerializer, published to a real RabbitMQ', () => {
       serializer: new CloudEventSerializer(),
     });
     await client.connect();
-  }, 60_000);
+    // On a CI runner the image is pulled first, alongside the other suites' containers.
+  }, 180_000);
 
+  // Optional chaining: when the setup failed, its own error is the one to report.
   afterAll(async () => {
-    await client.close();
-    await channel.close();
-    await connection.close();
-    await container.stop();
+    await client?.close();
+    await channel?.close();
+    await connection?.close();
+    await container?.stop();
   });
 
   it('delivers the integration event as a structured-mode CloudEvent, routed by its type', async () => {

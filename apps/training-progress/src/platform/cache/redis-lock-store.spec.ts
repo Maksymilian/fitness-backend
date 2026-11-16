@@ -24,11 +24,13 @@ describe('RedisLockStore, the LockStore contract', () => {
       store.onModuleInit();
       await store.connected();
     }
-  }, 60_000);
+    // On a CI runner the image is pulled first, alongside the other suites' containers.
+  }, 180_000);
 
+  // Optional chaining: when the setup failed, its own error is the one to report.
   afterAll(async () => {
-    await Promise.all(pool.map((store) => store.onApplicationShutdown()));
-    await container.stop();
+    await Promise.all((pool ?? []).map((store) => store.onApplicationShutdown()));
+    await container?.stop();
   });
 
   for (const contractCase of lockStoreContract(() => pool[next++ % pool.length]!, { concurrent: true })) {
