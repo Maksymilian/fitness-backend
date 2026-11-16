@@ -3,6 +3,7 @@ import { MembershipNotFound } from '../../domain/errors/membership-not-found.js'
 import { MembershipQueries } from './membership-queries.js';
 import { MembershipQuery } from './membership.query.js';
 
+/** Answers a `MembershipQuery` from SQL. */
 @QueryHandler(MembershipQuery)
 export class MembershipHandler implements IQueryHandler<MembershipQuery> {
   constructor(private readonly memberships: MembershipQueries) {}

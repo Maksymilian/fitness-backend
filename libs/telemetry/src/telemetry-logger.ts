@@ -13,6 +13,7 @@ const SEVERITY: Record<LogLevel, SeverityNumber> = {
 
 const tracer = trace.getTracer('@app/telemetry');
 
+/** Options of the `TelemetryLogger`: Nest's console logger options, and whether to print to the console. */
 export interface TelemetryLoggerOptions extends ConsoleLoggerOptions {
   /** Also print to the console (stdout, stderr). Off where logs only go to OpenTelemetry. Default `true`. */
   console?: boolean;

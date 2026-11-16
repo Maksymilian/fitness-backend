@@ -6,6 +6,7 @@ import { LedgerEntryAlreadyRecorded } from '../domain/errors/ledger-entry-alread
 import type { LedgerEntry } from '../domain/ledger-entry.js';
 import { LedgerEntryRepository } from '../domain/ledger-entry.repository.js';
 
+/** Stores ledger entries in Billing's PostgreSQL with Drizzle. */
 @Injectable()
 export class DrizzleLedgerEntryRepository extends LedgerEntryRepository {
   async add(transaction: Transaction, entry: LedgerEntry): Promise<void> {

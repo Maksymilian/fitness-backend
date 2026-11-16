@@ -62,9 +62,7 @@ export class MemberBotCommands implements OnModuleInit {
 
     this.bot.command('streak', 'Your active days in a row', async (ctx, memberId) => {
       const streak = await this.queryBus.execute(new StreakQuery(MemberId.from(memberId), new Date()));
-      await ctx.reply(
-        streak === 0 ? 'No streak yet: a day with a workout starts one.' : `🔥 ${streak} active ${streak === 1 ? 'day' : 'days'} in a row.`,
-      );
+      await ctx.reply(streak === 0 ? 'No streak yet: a day with a workout starts one.' : `🔥 ${streak} active ${streak === 1 ? 'day' : 'days'} in a row.`);
     });
 
     this.bot.command('personal_records', 'Your best workouts in each discipline', async (ctx, memberId) => {

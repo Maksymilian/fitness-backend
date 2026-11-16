@@ -5,6 +5,7 @@ import type { GoalMetric } from '../../domain/values/goal-metric.js';
 import type { GoalTarget } from '../../domain/values/goal-target.js';
 import type { TrainingGoalRepresentation } from '../training-goal.representation.interface.js';
 
+/** Asks to set a training goal for a member: a goal metric, a target and a training period. */
 export class SetTrainingGoalCommand extends Command<TrainingGoalRepresentation> {
   constructor(
     readonly memberId: MemberId,

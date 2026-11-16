@@ -12,8 +12,10 @@ import type { EquipmentType } from './values/equipment-type.js';
 import type { MemberId } from './values/member-id.js';
 import type { SerialNumber } from './values/serial-number.js';
 
+/** The domain events equipment records. */
 export type EquipmentEvent = EquipmentRegistered | EquipmentPaired | EquipmentUnpaired;
 
+/** What equipment holds, as the repository saves and reconstitutes it. */
 export interface EquipmentProps {
   readonly id: EquipmentId;
   readonly serialNumber: SerialNumber;
@@ -28,19 +30,16 @@ export interface EquipmentProps {
  * the member whose workouts it records.
  */
 export class Equipment extends AggregateRoot<EquipmentEvent> {
-  #props: EquipmentProps;
+  private wrappedProps: EquipmentProps;
 
   private constructor(props: EquipmentProps, version: number) {
     super(version);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /** Adds new equipment to the platform. The serial number's uniqueness is checked on save. */
   static register(serialNumber: SerialNumber, type: EquipmentType, now: Date): Equipment {
-    const equipment = new Equipment(
-      { id: EquipmentId.generate(), serialNumber, type, pairedMemberId: null, pairedAt: null, registeredAt: now },
-      0,
-    );
+    const equipment = new Equipment({ id: EquipmentId.generate(), serialNumber, type, pairedMemberId: null, pairedAt: null, registeredAt: now }, 0);
     equipment.record(new EquipmentRegistered(equipment.id, serialNumber, type, now));
     return equipment;
   }
@@ -50,11 +49,11 @@ export class Equipment extends AggregateRoot<EquipmentEvent> {
   }
 
   get id(): EquipmentId {
-    return this.#props.id;
+    return this.wrappedProps.id;
   }
 
   get props(): EquipmentProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 
   /**
@@ -62,23 +61,23 @@ export class Equipment extends AggregateRoot<EquipmentEvent> {
    * equipment paired with another member must be unpaired first.
    */
   pair(memberId: MemberId, now: Date): void {
-    const { pairedMemberId } = this.#props;
+    const { pairedMemberId } = this.wrappedProps;
     if (pairedMemberId?.equals(memberId)) {
       return;
     }
     if (pairedMemberId) {
       throw new EquipmentPairedWithAnotherMember(this.id.value);
     }
-    this.#props = { ...this.#props, pairedMemberId: memberId, pairedAt: now };
+    this.wrappedProps = { ...this.wrappedProps, pairedMemberId: memberId, pairedAt: now };
     this.record(new EquipmentPaired(this.id, memberId, now));
   }
 
   unpair(now: Date): void {
-    const { pairedMemberId } = this.#props;
+    const { pairedMemberId } = this.wrappedProps;
     if (!pairedMemberId) {
       throw new EquipmentNotPaired(this.id.value);
     }
-    this.#props = { ...this.#props, pairedMemberId: null, pairedAt: null };
+    this.wrappedProps = { ...this.wrappedProps, pairedMemberId: null, pairedAt: null };
     this.record(new EquipmentUnpaired(this.id, pairedMemberId, now));
   }
 
@@ -88,7 +87,7 @@ export class Equipment extends AggregateRoot<EquipmentEvent> {
    * doesn't change.
    */
   recordWorkout(recording: Recording, now: Date): Workout {
-    const { pairedMemberId, type } = this.#props;
+    const { pairedMemberId, type } = this.wrappedProps;
     if (!pairedMemberId) {
       throw new EquipmentNotPaired(this.id.value);
     }

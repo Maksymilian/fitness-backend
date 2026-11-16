@@ -9,6 +9,7 @@ import { SourceRevision } from '../../training-log/domain/values/source-revision
 import { GoalAllowance } from '../domain/goal-allowance.js';
 import { GoalAllowanceRepository } from '../domain/goal-allowance.repository.js';
 
+/** Stores goal allowances in PostgreSQL with Drizzle, with optimistic locking on `version`. */
 @Injectable()
 export class DrizzleGoalAllowanceRepository extends GoalAllowanceRepository {
   constructor(@InjectDrizzle() private readonly db: Database) {

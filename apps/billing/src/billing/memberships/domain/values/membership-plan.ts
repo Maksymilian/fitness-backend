@@ -1,5 +1,6 @@
 import { UnknownMembershipPlan } from '../errors/unknown-membership-plan.js';
 
+/** How a membership plan is stored and published. */
 export type MembershipPlanName = 'MONTHLY' | 'YEARLY';
 
 /** How often a membership is paid: `Monthly` or `Yearly`. The prices are the payment provider's catalog. */

@@ -15,6 +15,7 @@ export function toPersonalRecordSetV1(event: PersonalRecordSet): PersonalRecordS
   };
 }
 
+/** Maps a `GoalAchieved` domain event to its published-language form. */
 export function toGoalAchievedV1(event: GoalAchieved): GoalAchievedV1 {
   return {
     memberId: event.memberId.value,

@@ -21,8 +21,10 @@ import type { VoidReason } from './values/void-reason.js';
 /** Clock skew between equipment and the platform that a workout's start may have. */
 const ALLOWED_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
+/** The domain events a workout records. */
 export type WorkoutEvent = WorkoutRecorded | WorkoutCorrected | WorkoutVoided;
 
+/** What a workout holds, as the repository saves and reconstitutes it. */
 export interface WorkoutProps {
   readonly id: WorkoutId;
   readonly equipmentId: EquipmentId;
@@ -46,25 +48,19 @@ export interface WorkoutProps {
  * until it's voided: a voided workout is kept, never deleted.
  */
 export class Workout extends AggregateRoot<WorkoutEvent> {
-  #props: WorkoutProps;
-  #corrections: Correction[] = [];
+  private wrappedProps: WorkoutProps;
+  private readonly corrections: Correction[] = [];
 
   private constructor(props: WorkoutProps, version: number) {
     super(version);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /**
    * Creates a recorded workout. Only `Equipment.recordWorkout()` calls it: the rules for a new
    * workout (paired equipment, a supported discipline) belong to the equipment.
    */
-  static record(params: {
-    equipmentId: EquipmentId;
-    equipmentType: EquipmentType;
-    memberId: MemberId;
-    recording: Recording;
-    now: Date;
-  }): Workout {
+  static record(params: { equipmentId: EquipmentId; equipmentType: EquipmentType; memberId: MemberId; recording: Recording; now: Date }): Workout {
     const { recording, now } = params;
     if (recording.startedAt.getTime() > now.getTime() + ALLOWED_CLOCK_SKEW_MS) {
       throw new WorkoutStartedInTheFuture(recording.startedAt);
@@ -97,34 +93,34 @@ export class Workout extends AggregateRoot<WorkoutEvent> {
   }
 
   get id(): WorkoutId {
-    return this.#props.id;
+    return this.wrappedProps.id;
   }
 
   get props(): WorkoutProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 
   /** The corrections made since the workout was loaded, for the audit trail. */
   get newCorrections(): readonly Correction[] {
-    return this.#corrections;
+    return this.corrections;
   }
 
   /** Replaces the metrics, which were wrong. Only while recorded; a reason is required. */
   correct(metrics: WorkoutMetrics, reason: CorrectionReason, now: Date): void {
     this.ensureRecorded();
-    const correction = new Correction(this.#props.revision + 1, this.#props.metrics, metrics, reason, now);
-    this.#props = { ...this.#props, metrics, revision: correction.revision };
-    this.#corrections.push(correction);
+    const correction = new Correction(this.wrappedProps.revision + 1, this.wrappedProps.metrics, metrics, reason, now);
+    this.wrappedProps = { ...this.wrappedProps, metrics, revision: correction.revision };
+    this.corrections.push(correction);
     this.record(new WorkoutCorrected(this.facts(), correction));
   }
 
   /** Marks the workout as not counting, for example because someone else used the equipment. Final. */
   void(reason: VoidReason, now: Date): void {
     this.ensureRecorded();
-    this.#props = {
-      ...this.#props,
+    this.wrappedProps = {
+      ...this.wrappedProps,
       status: WorkoutStatus.Voided,
-      revision: this.#props.revision + 1,
+      revision: this.wrappedProps.revision + 1,
       voidReason: reason,
       voidedAt: now,
     };
@@ -132,14 +128,13 @@ export class Workout extends AggregateRoot<WorkoutEvent> {
   }
 
   private ensureRecorded(): void {
-    if (this.#props.status.equals(WorkoutStatus.Voided)) {
-      throw new WorkoutIsVoided(this.#props.id.value);
+    if (this.wrappedProps.status.equals(WorkoutStatus.Voided)) {
+      throw new WorkoutIsVoided(this.wrappedProps.id.value);
     }
   }
 
   private facts(): WorkoutFacts {
-    const { id, equipmentId, equipmentType, recordingId, memberId, discipline, startedAt, metrics, status, revision } =
-      this.#props;
+    const { id, equipmentId, equipmentType, recordingId, memberId, discipline, startedAt, metrics, status, revision } = this.wrappedProps;
     return { workoutId: id, equipmentId, equipmentType, recordingId, memberId, discipline, startedAt, metrics, status, revision };
   }
 }

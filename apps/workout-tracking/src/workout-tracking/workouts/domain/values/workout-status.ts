@@ -1,3 +1,4 @@
+/** How a workout status is stored and published. */
 export type WorkoutStatusName = 'RECORDED' | 'VOIDED';
 
 /** `Recorded`, or `Voided`: kept, but final and not counting. */

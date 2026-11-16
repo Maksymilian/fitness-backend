@@ -10,6 +10,6 @@ export interface LoggedWorkoutRepresentation {
 
 /** One page of a member's training log, newest first. */
 export interface TrainingLogPage {
-  edges: { cursor: string; node: LoggedWorkoutRepresentation }[];
+  edges: Array<{ cursor: string; node: LoggedWorkoutRepresentation }>;
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
 }

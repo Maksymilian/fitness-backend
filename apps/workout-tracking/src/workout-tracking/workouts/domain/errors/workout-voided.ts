@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a voided workout is asked to change. */
 export class WorkoutVoided extends DomainError {
   readonly kind = 'conflict';
 

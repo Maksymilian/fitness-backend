@@ -25,7 +25,7 @@ describe('GraphqlOperationMetricsPlugin', () => {
     const listener = await plugin.requestDidStart();
     await listener.willSendResponse?.({ operation, errors } as unknown as GraphQLRequestContextWillSendResponse<BaseContext>);
     const { resourceMetrics } = await reader.collect();
-    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as DataPoint<Histogram>[]);
+    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as Array<DataPoint<Histogram>>);
   }
 
   it('records an operation by its type and root fields', async () => {

@@ -39,7 +39,10 @@ export class RecordWorkoutHandler implements ICommandHandler<RecordWorkoutComman
       }
       // Lost a race with an identical recording: its workout and its event are the ones that count.
       const winner = await this.workoutRepository.findByRecording(equipmentId, recording.recordingId);
-      return { workout: representWorkout(winner!), duplicate: true };
+      if (winner === undefined) {
+        throw error;
+      }
+      return { workout: representWorkout(winner), duplicate: true };
     }
     return { workout: representWorkout(workout), duplicate: false };
   }

@@ -17,6 +17,7 @@ import { TrainingGoalId } from '../domain/values/training-goal-id.js';
 
 type TrainingGoalRow = typeof trainingGoals.$inferSelect;
 
+/** Stores training goals in PostgreSQL with Drizzle, with optimistic locking on `version`. */
 @Injectable()
 export class DrizzleTrainingGoalRepository extends TrainingGoalRepository {
   constructor(@InjectDrizzle() private readonly db: Database) {

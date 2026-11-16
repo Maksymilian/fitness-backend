@@ -58,7 +58,7 @@ describe('RateLimitGuard', () => {
 
   async function rejectedRequests() {
     const { resourceMetrics } = await reader.collect();
-    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as DataPoint<number>[]);
+    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as Array<DataPoint<number>>);
   }
 
   it('lets requests through up to the limit, without counting a rejection', async () => {
@@ -95,7 +95,12 @@ describe('RateLimitGuard', () => {
     expect(span.events.map(({ name, attributes }) => ({ name, attributes }))).toEqual([
       {
         name: 'rate_limit.rejected',
-        attributes: { 'nestjs.handler': 'EquipmentController.get', 'rate_limit.limit': 2, 'rate_limit.window_seconds': 60, 'rate_limit.retry_after_seconds': 60 },
+        attributes: {
+          'nestjs.handler': 'EquipmentController.get',
+          'rate_limit.limit': 2,
+          'rate_limit.window_seconds': 60,
+          'rate_limit.retry_after_seconds': 60,
+        },
       },
     ]);
   });

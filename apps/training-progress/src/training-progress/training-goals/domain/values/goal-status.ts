@@ -1,3 +1,4 @@
+/** How a goal status is stored and published. */
 export type GoalStatusName = 'ACTIVE' | 'ACHIEVED' | 'MISSED' | 'ABANDONED';
 
 /** Only an active goal can change status. */

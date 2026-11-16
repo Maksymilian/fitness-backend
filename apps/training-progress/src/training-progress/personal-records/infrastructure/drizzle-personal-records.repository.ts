@@ -20,6 +20,7 @@ const COLUMNS = {
   MOST_CALORIES: ['mostCalories', 'mostCaloriesLoggedWorkoutId', 'mostCaloriesSetAt'],
 } as const;
 
+/** Stores a member's personal records per discipline in PostgreSQL with Drizzle, with optimistic locking on `version`. */
 @Injectable()
 export class DrizzlePersonalRecordsRepository extends PersonalRecordsRepository {
   async find(transaction: Transaction, memberId: MemberId, discipline: Discipline): Promise<PersonalRecords | undefined> {
@@ -72,8 +73,6 @@ function toRecords(row: PersonalRecordsRow): PersonalRecord[] {
     const recordValue = row[value];
     const holder = row[loggedWorkoutId];
     const at = row[setAt];
-    return recordValue === null || holder === null || at === null
-      ? []
-      : [new PersonalRecord(metric, recordValue, LoggedWorkoutId.from(holder), at)];
+    return recordValue === null || holder === null || at === null ? [] : [new PersonalRecord(metric, recordValue, LoggedWorkoutId.from(holder), at)];
   });
 }

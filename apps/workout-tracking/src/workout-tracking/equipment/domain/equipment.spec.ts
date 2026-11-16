@@ -30,13 +30,14 @@ function pairedBike(member = ada): Equipment {
   return bike;
 }
 
-const ride = (discipline = Discipline.Cycling) =>
-  new Recording(
+function ride(discipline = Discipline.Cycling) {
+  return new Recording(
     RecordingId.from('rec-1'),
     discipline,
     new Date('2026-10-08T09:00:00Z'),
     WorkoutMetrics.of({ durationSeconds: 2700, distanceMeters: 18200, calories: 530 }),
   );
+}
 
 describe('Equipment', () => {
   describe('register', () => {

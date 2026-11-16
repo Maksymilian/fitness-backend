@@ -10,7 +10,10 @@ import { TrainingGoalSet } from '../../training-progress/training-goals/domain/e
 import { DomainTopics, type LoggedWorkoutPayloadV1 } from './domain-topics.js';
 import { RouteTable } from './route-table.js';
 
-const loggedWorkout = (event: WorkoutLogged | LoggedWorkoutRevised | LoggedWorkoutStoppedCounting, metrics?: WorkoutLogged['metrics']): LoggedWorkoutPayloadV1 => ({
+const loggedWorkout = (
+  event: WorkoutLogged | LoggedWorkoutRevised | LoggedWorkoutStoppedCounting,
+  metrics?: WorkoutLogged['metrics'],
+): LoggedWorkoutPayloadV1 => ({
   loggedWorkoutId: event.loggedWorkoutId.value,
   memberId: event.memberId.value,
   discipline: event.discipline.value,

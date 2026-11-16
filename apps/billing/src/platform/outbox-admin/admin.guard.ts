@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Environment } from '../config/environment.js';
 
-type HttpRequest = { headers: Record<string, string | string[] | undefined> };
+interface HttpRequest {
+  headers: Record<string, string | string[] | undefined>;
+}
 
 /**
  * Placeholder until authentication exists: the internal admin routes need the `x-admin-token`

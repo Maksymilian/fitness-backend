@@ -7,7 +7,7 @@ import { TracedTransport } from './traced-transport.js';
 
 /** Records the flow and the active span each message is published in. */
 class RecordingTransport extends OutboxTransport {
-  static readonly published: { flowId?: string; spanName?: string }[] = [];
+  static readonly published: Array<{ flowId?: string; spanName?: string }> = [];
 
   publish(): void {
     const span = trace.getActiveSpan() as unknown as { name?: string } | undefined;

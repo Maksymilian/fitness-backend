@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import { IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 
+/** The query string of `GET /members/:memberId/ledger`: page size and cursor. */
 export class LedgerDto {
   @IsOptional()
   @Type(() => Number)

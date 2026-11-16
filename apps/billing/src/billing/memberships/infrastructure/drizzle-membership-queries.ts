@@ -6,6 +6,7 @@ import { ledgerEntries, memberships } from '../../../platform/database/schema.js
 import type { MembershipRepresentation } from '../application/membership.representation.interface.js';
 import { MembershipQueries } from '../application/queries/membership-queries.js';
 
+/** Reads memberships with SQL, bypassing the domain model. */
 @Injectable()
 export class DrizzleMembershipQueries extends MembershipQueries {
   constructor(@InjectDrizzle() private readonly db: Database) {

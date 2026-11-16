@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a discipline isn't one Training Progress knows. */
 export class UnknownDiscipline extends DomainError {
   readonly kind = 'invariant-violation';
 

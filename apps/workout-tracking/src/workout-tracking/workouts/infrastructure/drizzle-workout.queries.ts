@@ -11,6 +11,7 @@ type WorkoutRow = typeof workouts.$inferSelect;
 /** A position in a member's workouts: the last workout's start and id, as `<ISO start>_<id>`. */
 export const WORKOUT_CURSOR = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)_([0-9a-f-]{36})$/;
 
+/** Reads workouts with SQL, bypassing the domain model. */
 @Injectable()
 export class DrizzleWorkoutQueries extends WorkoutQueries {
   constructor(@InjectDrizzle() private readonly db: Database) {
@@ -28,10 +29,7 @@ export class DrizzleWorkoutQueries extends WorkoutQueries {
       .select()
       .from(workouts)
       .where(
-        and(
-          eq(workouts.memberId, memberId),
-          after ? sql`(${workouts.startedAt}, ${workouts.id}) < (${after[1]}::timestamptz, ${after[2]}::uuid)` : undefined,
-        ),
+        and(eq(workouts.memberId, memberId), after ? sql`(${workouts.startedAt}, ${workouts.id}) < (${after[1]}::timestamptz, ${after[2]}::uuid)` : undefined),
       )
       // Served by the (member_id, started_at desc, id desc) index.
       .orderBy(desc(workouts.startedAt), desc(workouts.id))

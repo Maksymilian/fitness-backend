@@ -27,10 +27,6 @@ export class HealthController {
   @Get('ready')
   @HealthCheck()
   ready() {
-    return this.health.check([
-      () => this.postgres.isHealthy('postgres'),
-      () => this.redis.isReachable('redis'),
-      () => this.rabbitMq.isReachable('rabbitmq'),
-    ]);
+    return this.health.check([() => this.postgres.isHealthy('postgres'), () => this.redis.isReachable('redis'), () => this.rabbitMq.isReachable('rabbitmq')]);
   }
 }

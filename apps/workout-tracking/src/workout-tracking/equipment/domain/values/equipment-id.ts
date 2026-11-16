@@ -1,5 +1,6 @@
 import { generateId, isUuid } from '@app/ddd';
 
+/** Identifies a piece of equipment: a UUIDv7 the domain generates. */
 export class EquipmentId {
   private constructor(readonly value: string) {}
 

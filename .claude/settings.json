@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path // empty' | { read -r f; case \"$f\" in \"$CLAUDE_PROJECT_DIR\"/apps/*.ts|\"$CLAUDE_PROJECT_DIR\"/libs/*.ts|\"$CLAUDE_PROJECT_DIR\"/load-tests/*.ts) \"$CLAUDE_PROJECT_DIR\"/node_modules/.bin/prettier --write --log-level warn \"$f\" ;; esac; } 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Formatting with Prettier"
+          }
+        ]
+      }
+    ]
+  }
+}

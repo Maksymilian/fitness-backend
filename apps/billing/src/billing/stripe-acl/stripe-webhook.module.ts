@@ -20,6 +20,7 @@ import { StripeEventTranslator } from './stripe-event.translator.js';
       isGlobal: false,
       inject: [ConfigService],
       useFactory: (config: ConfigService<Environment, true>) => ({
+        // Imported only when STRIPE_WEBHOOK_SECRET is set (StripeAclModule's ConditionalModule).
         receivers: { stripe: { scheme: 'stripe', secret: config.get('STRIPE_WEBHOOK_SECRET', { infer: true })!, dedupe: false } },
       }),
     }),

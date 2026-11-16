@@ -11,6 +11,7 @@ export const WorkoutTrackingTopics = {
   workoutVoidedV1: 'workout-tracking.integration.workout-voided.v1',
 } as const;
 
+/** One of Workout Tracking's integration event topics. */
 export type WorkoutTrackingTopic = (typeof WorkoutTrackingTopics)[keyof typeof WorkoutTrackingTopics];
 
 /** Matches every Workout Tracking integration event, for a queue binding. */

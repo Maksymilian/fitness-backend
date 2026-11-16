@@ -5,7 +5,10 @@ import { logs } from '@opentelemetry/api-logs';
 import { MessageFlowInterceptor } from './message-flow.interceptor.js';
 import { countResilienceEvents } from './resilience-metrics.js';
 
-type Flushable = { forceFlush?: () => Promise<void>; getDelegate?: () => Flushable };
+interface Flushable {
+  forceFlush?: () => Promise<void>;
+  getDelegate?: () => Flushable;
+}
 
 /**
  * The service side of OpenTelemetry (the SDK itself starts before the service, from

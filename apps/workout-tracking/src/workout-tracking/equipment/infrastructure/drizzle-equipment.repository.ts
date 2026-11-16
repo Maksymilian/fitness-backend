@@ -15,6 +15,7 @@ import { SerialNumber } from '../domain/values/serial-number.js';
 
 type EquipmentRow = typeof equipmentTable.$inferSelect;
 
+/** Stores equipment in PostgreSQL with Drizzle, with optimistic locking on `version`. */
 @Injectable()
 export class DrizzleEquipmentRepository extends EquipmentRepository {
   constructor(@InjectDrizzle() private readonly db: Database) {

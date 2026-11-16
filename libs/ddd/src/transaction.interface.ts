@@ -4,5 +4,6 @@
  * commit or roll back together.
  */
 export interface Transaction {
-  readonly __brand: 'Transaction';
+  // A brand only: it keeps other objects from passing as a Transaction; no value carries it.
+  readonly transactionBrand: 'Transaction';
 }

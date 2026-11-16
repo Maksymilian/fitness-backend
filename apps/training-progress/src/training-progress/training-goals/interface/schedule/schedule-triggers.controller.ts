@@ -5,7 +5,10 @@ import type { CloudEventV1 } from 'cloudevents';
 import { ScheduleTriggers } from '../../../../platform/messaging/schedule-triggers.js';
 import { MissEndedGoalsCommand } from '../../application/commands/miss-ended-goals.command.js';
 
-type Channel = { ack(message: unknown): void; nack(message: unknown, allUpTo: boolean, requeue: boolean): void };
+interface Channel {
+  ack(message: unknown): void;
+  nack(message: unknown, allUpTo: boolean, requeue: boolean): void;
+}
 
 /**
  * Training goals' schedule triggers, from the schedule queue: a Kubernetes CronJob publishes them

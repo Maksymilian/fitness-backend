@@ -3,6 +3,7 @@ import { EquipmentNotFound } from '../../domain/errors/equipment-not-found.js';
 import { EquipmentQueries } from './equipment-queries.js';
 import { GetEquipmentQuery } from './get-equipment.query.js';
 
+/** Answers a `GetEquipmentQuery` from SQL. */
 @QueryHandler(GetEquipmentQuery)
 export class GetEquipmentHandler implements IQueryHandler<GetEquipmentQuery> {
   constructor(private readonly equipmentQueries: EquipmentQueries) {}

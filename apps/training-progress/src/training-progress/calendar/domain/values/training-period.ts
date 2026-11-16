@@ -2,6 +2,7 @@ import { UTCDate } from '@date-fns/utc';
 import { addDays, endOfISOWeek, endOfMonth, endOfYear, startOfDay, startOfISOWeek, startOfMonth, startOfYear } from 'date-fns';
 import { UnknownPeriodKind } from '../errors/unknown-period-kind.js';
 
+/** The kinds of training period a goal or a progress summary covers. */
 export type PeriodKind = 'WEEK' | 'MONTH' | 'YEAR';
 
 const PERIOD_KINDS: readonly PeriodKind[] = ['WEEK', 'MONTH', 'YEAR'];
@@ -29,11 +30,7 @@ export class TrainingPeriod {
   static containing(kind: PeriodKind, date: Date): TrainingPeriod {
     const utc = new UTCDate(date);
     const [start, lastDay] =
-      kind === 'WEEK'
-        ? [startOfISOWeek(utc), endOfISOWeek(utc)]
-        : kind === 'MONTH'
-          ? [startOfMonth(utc), endOfMonth(utc)]
-          : [startOfYear(utc), endOfYear(utc)];
+      kind === 'WEEK' ? [startOfISOWeek(utc), endOfISOWeek(utc)] : kind === 'MONTH' ? [startOfMonth(utc), endOfMonth(utc)] : [startOfYear(utc), endOfYear(utc)];
     return new TrainingPeriod(kind, new Date(start.getTime()), new Date(addDays(startOfDay(lastDay), 1).getTime()));
   }
 

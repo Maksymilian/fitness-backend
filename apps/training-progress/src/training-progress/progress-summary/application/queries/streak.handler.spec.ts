@@ -1,6 +1,8 @@
 import { streak } from './streak.handler.js';
 
-const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+function day(iso: string) {
+  return new Date(`${iso}T00:00:00Z`);
+}
 
 describe('streak', () => {
   const today = day('2026-10-08');

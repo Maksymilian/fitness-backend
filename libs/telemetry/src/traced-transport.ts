@@ -2,10 +2,12 @@ import type { Type } from '@nestjs/common';
 import type { OutboxMessage, OutboxTransport } from '@nestjs/outbox';
 import { inStagedTrace } from './staged-trace.js';
 
-type Options = { signal: AbortSignal };
-// A mixin's base needs a constructor of `any[]` (TypeScript), and a concrete publish() to call.
-// oxlint-disable-next-line no-explicit-any
-type Transport = new (...args: any[]) => { publish(message: OutboxMessage, options: Options): unknown };
+interface Options {
+  signal: AbortSignal;
+}
+// The base as Traced needs it: a constructor that takes whatever Nest passes it, and a concrete
+// publish() to call.
+type Transport = new (...args: unknown[]) => { publish(message: OutboxMessage, options: Options): unknown };
 
 /**
  * An outbox transport that hands each message to its broker in the trace and flow that staged it
@@ -13,6 +15,7 @@ type Transport = new (...args: any[]) => { publish(message: OutboxMessage, optio
  * instrumentation adds the producer span and the message headers the consumer continues from.
  */
 export function TracedTransport(Base: Type<OutboxTransport>): Type<OutboxTransport> {
+  // Every outbox transport class has a publish() to call; Type<OutboxTransport> just doesn't say so.
   class Traced extends (Base as unknown as Transport) {
     override publish(message: OutboxMessage, options: Options): Promise<void> {
       return inStagedTrace(message, 'relay', async () => {

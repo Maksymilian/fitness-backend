@@ -9,6 +9,7 @@ import { LedgerQueries } from '../application/queries/ledger-queries.js';
 /** A position in a member's ledger: the last entry's time and id, as `<ISO time>_<id>`. */
 export const LEDGER_CURSOR = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)_([0-9a-f-]{36})$/;
 
+/** Reads pages of a member's ledger with SQL, bypassing the domain model. */
 @Injectable()
 export class DrizzleLedgerQueries extends LedgerQueries {
   constructor(@InjectDrizzle() private readonly db: Database) {

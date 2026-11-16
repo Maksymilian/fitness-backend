@@ -73,7 +73,7 @@ describe('Telegram bot (e2e)', () => {
       .post('/graphql')
       .send({ query: `query ($id: ID!) { member(id: $id) { trainingGoals { id status target } } }`, variables: { id: memberId } })
       .expect(200);
-    return (body as { data: { member: { trainingGoals: { id: string; status: string; target: number }[] } } }).data.member.trainingGoals;
+    return (body as { data: { member: { trainingGoals: Array<{ id: string; status: string; target: number }> } } }).data.member.trainingGoals;
   }
 
   it('asks Telegram to post the updates to the webhook, with the secret token', async () => {
@@ -142,7 +142,10 @@ describe('Telegram bot (e2e)', () => {
     const { status, sent } = await post(buttonPress(106, `abandon-confirmed:${goal.id}`));
 
     expect(status).toBe(200);
-    expect(sent.find(({ method }) => method === 'answerCallbackQuery')?.payload).toMatchObject({ text: `Training goal ${goal.id} not found`, show_alert: true });
+    expect(sent.find(({ method }) => method === 'answerCallbackQuery')?.payload).toMatchObject({
+      text: `Training goal ${goal.id} not found`,
+      show_alert: true,
+    });
     expect(await trainingGoals('owner@example.com')).toEqual([{ id: goal.id, status: 'ACTIVE', target: 5000 }]);
   });
 

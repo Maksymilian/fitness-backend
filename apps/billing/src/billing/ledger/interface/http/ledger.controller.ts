@@ -6,6 +6,7 @@ import { MemberParams } from '../../../memberships/interface/http/dto/member.par
 import { LedgerQuery } from '../../application/queries/ledger.query.js';
 import { LedgerDto } from './dto/ledger.dto.js';
 
+/** REST endpoint for a member's ledger. */
 @Controller({ path: 'members/:memberId/ledger', version: '1' })
 export class LedgerController {
   constructor(private readonly queryBus: QueryBus) {}

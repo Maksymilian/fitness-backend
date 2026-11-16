@@ -20,8 +20,6 @@ export class WorkoutMetrics {
   }
 
   equals(other: WorkoutMetrics): boolean {
-    return (
-      this.duration.equals(other.duration) && this.distance.equals(other.distance) && this.calories.equals(other.calories)
-    );
+    return this.duration.equals(other.duration) && this.distance.equals(other.distance) && this.calories.equals(other.calories);
   }
 }

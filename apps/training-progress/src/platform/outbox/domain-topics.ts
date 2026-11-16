@@ -22,11 +22,13 @@ export interface LoggedWorkoutPayloadV1 {
   calories: number;
 }
 
+/** The outbox payload of personal records changes: whose records changed, in which discipline. */
 export interface PersonalRecordsPayloadV1 {
   memberId: string;
   discipline: string;
 }
 
+/** The outbox payload of a training goal that was set. */
 export interface TrainingGoalSetPayloadV1 {
   trainingGoalId: string;
   memberId: string;

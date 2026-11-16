@@ -1,3 +1,4 @@
+/** How a membership status is stored and published. */
 export type MembershipStatusName = 'ACTIVE' | 'ENDED';
 
 /** `Active`: paid through a date that hasn't passed, or `Ended`: no access until it starts again. */

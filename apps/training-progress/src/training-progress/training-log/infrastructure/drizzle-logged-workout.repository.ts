@@ -13,6 +13,7 @@ import { WorkoutMetrics } from '../domain/values/workout-metrics.js';
 
 type LoggedWorkoutRow = typeof loggedWorkouts.$inferSelect;
 
+/** Stores logged workouts in PostgreSQL with Drizzle, with optimistic locking on `source_revision`: the upstream revision it holds. */
 @Injectable()
 export class DrizzleLoggedWorkoutRepository extends LoggedWorkoutRepository {
   async find(transaction: Transaction, id: LoggedWorkoutId): Promise<LoggedWorkout | undefined> {

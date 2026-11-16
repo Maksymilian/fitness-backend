@@ -5,6 +5,7 @@ import { WorkoutRepository } from '../../domain/workout.repository.js';
 import { representWorkout } from '../workout.representation.interface.js';
 import { VoidWorkoutCommand } from './void-workout.command.js';
 
+/** Voids a workout: loads it, calls `void`, saves it and stages its events in one transaction. */
 @CommandHandler(VoidWorkoutCommand)
 export class VoidWorkoutHandler implements ICommandHandler<VoidWorkoutCommand> {
   constructor(

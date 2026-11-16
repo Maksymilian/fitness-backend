@@ -123,9 +123,7 @@ export class TelegramBot implements OnApplicationBootstrap, BeforeApplicationShu
     // identifies a person.
     this.bot.use((ctx, next) => {
       const type = ALLOWED_UPDATES.find((kind) => kind in ctx.update) ?? 'update';
-      return inRoundtrip(`telegram ${type}`, { 'telegram.update.id': ctx.update.update_id, 'telegram.update.type': type }, () =>
-        inInterface('telegram', next),
-      );
+      return inRoundtrip(`telegram ${type}`, { 'telegram.update.id': ctx.update.update_id, 'telegram.update.type': type }, () => inInterface('telegram', next));
     });
     const privateChats = this.bot.chatType('private');
     privateChats.use(this.handlers);
@@ -157,6 +155,7 @@ export class TelegramBot implements OnApplicationBootstrap, BeforeApplicationShu
       await bot.init();
       await bot.api.setMyCommands(this.menu(), { scope: { type: 'all_private_chats' } });
       if (this.config.get('TELEGRAM_UPDATES', { infer: true }) === 'webhook') {
+        // validateEnvironment() requires TELEGRAM_WEBHOOK_URL when TELEGRAM_UPDATES is webhook.
         await bot.api.setWebhook(this.config.get('TELEGRAM_WEBHOOK_URL', { infer: true })!, {
           secret_token: this.config.get('TELEGRAM_WEBHOOK_SECRET', { infer: true }),
           allowed_updates: ALLOWED_UPDATES,

@@ -18,10 +18,12 @@ export function disciplineIcon(discipline: string | null): string {
   return (discipline && ICONS[discipline]) || '🏅';
 }
 
+/** Formats a distance for a bot message, in kilometres. */
 export function distance(meters: number): string {
   return `${decimal.format(meters / 1000)} km`;
 }
 
+/** Formats a duration for a bot message, in hours and minutes. */
 export function duration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -31,14 +33,17 @@ export function duration(seconds: number): string {
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 }
 
+/** Formats calories for a bot message, in kcal. */
 export function calories(kilocalories: number): string {
   return `${integer.format(kilocalories)} kcal`;
 }
 
+/** Formats a number of workouts for a bot message, singular or plural. */
 export function workouts(count: number): string {
   return count === 1 ? '1 workout' : `${integer.format(count)} workouts`;
 }
 
+/** Formats a day for a bot message (`Oct 8`), in UTC. */
 export function day(date: Date): string {
   return format(new UTCDate(date), 'MMM d');
 }

@@ -10,6 +10,7 @@ import { getRPCMetadata } from '@opentelemetry/core';
  */
 export const INTERFACE = 'interface';
 
+/** The interfaces a flow can enter a service through, recorded on its spans and logs. */
 export type InterfaceName = 'graphql' | 'rest' | 'telegram' | 'stripe' | 'rabbitmq';
 
 /** The interface of the active context, if there is one. */

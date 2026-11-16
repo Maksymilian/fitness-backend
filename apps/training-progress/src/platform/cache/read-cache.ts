@@ -34,7 +34,8 @@ export class ReadCache {
   private readonly enabled: boolean;
   private readonly locked: boolean;
   private readonly reads: Counter = metrics.getMeter('training-progress.read-cache').createCounter('read_cache.reads', {
-    description: 'Reads of cached read models, by read model and by how they were answered: hit, load (from PostgreSQL), wait (for another caller’s load), off, unavailable',
+    description:
+      'Reads of cached read models, by read model and by how they were answered: hit, load (from PostgreSQL), wait (for another caller’s load), off, unavailable',
   });
   private lastWarning = 0;
 
@@ -108,8 +109,9 @@ export class ReadCache {
           }
           return await this.loadAndStore(key, ttlMs, load);
         } finally {
-          // If Redis doesn't answer, the lock expires after its ttl.
-          await withTimeout(lock.release()).catch(() => false);
+          // If Redis doesn't answer, the lock expires after its ttl. Promise.try: a store that throws
+          // at once, instead of rejecting, doesn't fail the read either.
+          await withTimeout(Promise.try(() => lock.release())).catch(() => false);
         }
       }
       await sleep(Math.min(10 * 2 ** attempt, 100));

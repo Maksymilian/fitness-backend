@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a goal metric isn't one Training Progress knows. */
 export class UnknownGoalMetric extends DomainError {
   readonly kind = 'invariant-violation';
 

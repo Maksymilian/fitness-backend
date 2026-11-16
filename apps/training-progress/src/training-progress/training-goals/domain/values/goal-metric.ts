@@ -1,5 +1,6 @@
 import { UnknownGoalMetric } from '../errors/unknown-goal-metric.js';
 
+/** How a goal metric is stored and published. */
 export type GoalMetricName = 'DISTANCE' | 'DURATION' | 'CALORIES' | 'WORKOUT_COUNT';
 
 const GOAL_METRICS: readonly GoalMetricName[] = ['DISTANCE', 'DURATION', 'CALORIES', 'WORKOUT_COUNT'];

@@ -60,10 +60,7 @@ describe('Training Progress: rate limit off (e2e)', () => {
 
   it('answers every GraphQL request past RATE_LIMIT_PER_MINUTE, without the rate limit headers', async () => {
     for (let i = 0; i < 5; i++) {
-      const { body, headers } = await request(app.getHttpServer())
-        .post('/graphql')
-        .send({ query: '{ member(id: "ada@example.com") { streak } }' })
-        .expect(200);
+      const { body, headers } = await request(app.getHttpServer()).post('/graphql').send({ query: '{ member(id: "ada@example.com") { streak } }' }).expect(200);
       expect(body.errors).toBeUndefined();
       expect(headers['x-ratelimit-limit']).toBeUndefined();
     }

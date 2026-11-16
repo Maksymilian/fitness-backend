@@ -13,6 +13,7 @@ import { ProviderReference } from '../domain/values/provider-reference.js';
 
 type MembershipRow = typeof memberships.$inferSelect;
 
+/** Stores memberships in Billing's PostgreSQL with Drizzle, with optimistic locking on `revision`. */
 @Injectable()
 export class DrizzleMembershipRepository extends MembershipRepository {
   async find(transaction: Transaction, memberId: MemberId): Promise<Membership | undefined> {

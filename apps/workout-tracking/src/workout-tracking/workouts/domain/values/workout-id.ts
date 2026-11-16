@@ -1,5 +1,6 @@
 import { generateId, isUuid } from '@app/ddd';
 
+/** Identifies a workout: a UUIDv7 the domain generates. */
 export class WorkoutId {
   private constructor(readonly value: string) {}
 

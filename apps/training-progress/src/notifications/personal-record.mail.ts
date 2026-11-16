@@ -4,6 +4,7 @@ import type { PersonalRecordSetV1 } from '../training-progress/published-languag
 import { MailValues } from './mail-values.js';
 import type { MemberContact } from './member-contact.interface.js';
 
+/** What the personal-record mail needs: the member's contact and the published record. */
 export interface PersonalRecordNotification {
   contact: MemberContact;
   record: PersonalRecordSetV1;

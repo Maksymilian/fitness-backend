@@ -22,6 +22,7 @@ export type DrizzleTransaction = Parameters<Parameters<Database['transaction']>[
 
 /** Opens the transaction the domain only knows as an opaque `Transaction`. */
 export function drizzleTransaction(tx: Transaction): DrizzleTransaction {
+  // Every Transaction the domain holds is a Drizzle transaction this service opened (Transactions).
   return tx as unknown as DrizzleTransaction;
 }
 

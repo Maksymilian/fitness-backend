@@ -13,13 +13,8 @@ import type { MembershipPlan } from './values/membership-plan.js';
 import { MembershipStatus } from './values/membership-status.js';
 import type { ProviderReference } from './values/provider-reference.js';
 
-export type MembershipEvent =
-  | MembershipStarted
-  | MembershipRenewed
-  | MembershipPlanSwitched
-  | MembershipCancelled
-  | MembershipResumed
-  | MembershipEnded;
+/** The domain events a membership records. */
+export type MembershipEvent = MembershipStarted | MembershipRenewed | MembershipPlanSwitched | MembershipCancelled | MembershipResumed | MembershipEnded;
 
 /** A payment the membership is paid with: for a plan, through a date, under the provider's reference. */
 export interface MembershipPayment {
@@ -29,6 +24,7 @@ export interface MembershipPayment {
   readonly providerReference: ProviderReference;
 }
 
+/** What a membership holds, as the repository saves and reconstitutes it. */
 export interface MembershipProps {
   readonly id: MembershipId;
   readonly memberId: MemberId;
@@ -50,11 +46,11 @@ export interface MembershipProps {
  * payment provider's events can be applied twice, or late.
  */
 export class Membership extends AggregateRoot<MembershipEvent> {
-  #props: MembershipProps;
+  private wrappedProps: MembershipProps;
 
   private constructor(props: MembershipProps) {
     super(props.revision);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /** A member's first payment starts their membership, with renewal on. */
@@ -82,19 +78,19 @@ export class Membership extends AggregateRoot<MembershipEvent> {
   }
 
   get id(): MembershipId {
-    return this.#props.id;
+    return this.wrappedProps.id;
   }
 
   get memberId(): MemberId {
-    return this.#props.memberId;
+    return this.wrappedProps.memberId;
   }
 
   get props(): MembershipProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 
   get isActive(): boolean {
-    return this.#props.status.equals(MembershipStatus.Active);
+    return this.wrappedProps.status.equals(MembershipStatus.Active);
   }
 
   /**
@@ -117,10 +113,10 @@ export class Membership extends AggregateRoot<MembershipEvent> {
       this.record(new MembershipStarted(this.facts(), now));
       return;
     }
-    if (!this.#props.providerReference.equals(payment.providerReference)) {
-      throw new PaymentForAnotherMembership(this.#props.memberId.value, payment.providerReference.value);
+    if (!this.wrappedProps.providerReference.equals(payment.providerReference)) {
+      throw new PaymentForAnotherMembership(this.wrappedProps.memberId.value, payment.providerReference.value);
     }
-    if (payment.paidThrough <= this.#props.paidThrough) {
+    if (payment.paidThrough <= this.wrappedProps.paidThrough) {
       return;
     }
     this.change({ paidThrough: payment.paidThrough });
@@ -129,7 +125,7 @@ export class Membership extends AggregateRoot<MembershipEvent> {
 
   /** The member moves to the other plan. Ignored for another membership, an ended one, or the same plan. */
   switchPlan(plan: MembershipPlan, providerReference: ProviderReference, now: Date): void {
-    if (!this.concerns(providerReference) || this.#props.plan.equals(plan)) {
+    if (!this.concerns(providerReference) || this.wrappedProps.plan.equals(plan)) {
       return;
     }
     this.change({ plan });
@@ -138,7 +134,7 @@ export class Membership extends AggregateRoot<MembershipEvent> {
 
   /** The member turns renewal off: still active until it's paid through. */
   cancel(providerReference: ProviderReference, now: Date): void {
-    if (!this.concerns(providerReference) || !this.#props.renews) {
+    if (!this.concerns(providerReference) || !this.wrappedProps.renews) {
       return;
     }
     this.change({ renews: false });
@@ -147,7 +143,7 @@ export class Membership extends AggregateRoot<MembershipEvent> {
 
   /** The member turns renewal on again, before the membership ended. */
   resume(providerReference: ProviderReference, now: Date): void {
-    if (!this.concerns(providerReference) || this.#props.renews) {
+    if (!this.concerns(providerReference) || this.wrappedProps.renews) {
       return;
     }
     this.change({ renews: true });
@@ -165,15 +161,15 @@ export class Membership extends AggregateRoot<MembershipEvent> {
 
   /** Whether a change from the provider is about this membership while it's active: not an older one, not after it ended. */
   private concerns(providerReference: ProviderReference): boolean {
-    return this.isActive && this.#props.providerReference.equals(providerReference);
+    return this.isActive && this.wrappedProps.providerReference.equals(providerReference);
   }
 
   private change(changes: Partial<MembershipProps>): void {
-    this.#props = { ...this.#props, ...changes, revision: (changes.revision ?? this.#props.revision + 1) };
+    this.wrappedProps = { ...this.wrappedProps, ...changes, revision: changes.revision ?? this.wrappedProps.revision + 1 };
   }
 
   private facts(): MembershipFacts {
-    const { id, memberId, plan, status, paidThrough, renews, revision } = this.#props;
+    const { id, memberId, plan, status, paidThrough, renews, revision } = this.wrappedProps;
     return { membershipId: id, memberId, plan, status, paidThrough, renews, revision };
   }
 }

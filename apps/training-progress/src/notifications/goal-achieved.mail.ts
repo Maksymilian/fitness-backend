@@ -4,6 +4,7 @@ import type { GoalAchievedV1 } from '../training-progress/published-language/top
 import { MailValues } from './mail-values.js';
 import type { MemberContact } from './member-contact.interface.js';
 
+/** What the goal-achieved mail needs: the member's contact and the published goal. */
 export interface GoalAchievedNotification {
   contact: MemberContact;
   goal: GoalAchievedV1;

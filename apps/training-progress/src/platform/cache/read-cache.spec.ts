@@ -74,7 +74,7 @@ describe('ReadCache', () => {
 
       const streaks = await Promise.all(Array.from({ length: 20 }, () => readCache.getOrLoad('streak:ada', 60_000, load)));
 
-      expect(streaks).toEqual(Array(20).fill(7));
+      expect(streaks).toEqual(Array.from({ length: 20 }, () => 7));
       expect(load).toHaveBeenCalledTimes(1);
     });
 
@@ -103,7 +103,7 @@ describe('ReadCache', () => {
       const [first, ...others] = await Promise.allSettled(Array.from({ length: 5 }, () => readCache.getOrLoad('streak:ada', 60_000, load)));
 
       expect(first).toMatchObject({ status: 'rejected' });
-      expect(others).toEqual(Array(4).fill({ status: 'fulfilled', value: 7 }));
+      expect(others).toEqual(Array.from({ length: 4 }, () => ({ status: 'fulfilled', value: 7 })));
       expect(load).toHaveBeenCalledTimes(2);
     });
 
@@ -119,6 +119,28 @@ describe('ReadCache', () => {
 
       await expect(readCache.getOrLoad('streak:ada', 60_000, async () => 7)).resolves.toBe(7);
       expect(Date.now() - startedAt).toBeLessThan(1000);
+    });
+
+    it('when the lock store fails to release the lock at once, the read still returns the loaded value', async () => {
+      const failing: LockStore = {
+        acquire: async () => ({ acquired: true, fencingToken: 1 }),
+        renew: async () => true,
+        release: () => {
+          throw new Error('The client is closed');
+        },
+      };
+      const moduleRef = await Test.createTestingModule({
+        imports: [LocksModule.forRoot()],
+        providers: [{ provide: 'failing', inject: [LocksStorage], useFactory: (storage: LocksStorage) => storage.registerSource(failing) }],
+      }).compile();
+      await moduleRef.init();
+      const readCache = new ReadCache(createCache(), moduleRef.get(Locks), config());
+
+      try {
+        await expect(readCache.getOrLoad('streak:grace', 60_000, async () => 7)).resolves.toBe(7);
+      } finally {
+        await moduleRef.close();
+      }
     });
 
     it('without the lock store (Redis down), every reader loads it', async () => {

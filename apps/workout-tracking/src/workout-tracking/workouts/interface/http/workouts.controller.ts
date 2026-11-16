@@ -11,6 +11,7 @@ import { WorkoutMetrics } from '../../domain/values/workout-metrics.js';
 import { CorrectWorkoutDto } from './dto/correct-workout.dto.js';
 import { VoidWorkoutDto } from './dto/void-workout.dto.js';
 
+/** REST endpoints to read, correct and void a workout. */
 @Controller({ path: 'workouts', version: '1' })
 export class WorkoutsController {
   constructor(
@@ -28,9 +29,7 @@ export class WorkoutsController {
   @Post(':workoutId/corrections')
   @HttpCode(HttpStatus.OK)
   correct(@Param('workoutId', ParseUUIDPipe) workoutId: string, @Body() dto: CorrectWorkoutDto) {
-    return this.commandBus.execute(
-      new CorrectWorkoutCommand(WorkoutId.from(workoutId), WorkoutMetrics.of(dto), CorrectionReason.from(dto.reason)),
-    );
+    return this.commandBus.execute(new CorrectWorkoutCommand(WorkoutId.from(workoutId), WorkoutMetrics.of(dto), CorrectionReason.from(dto.reason)));
   }
 
   /** Voiding keeps the workout, so it isn't a DELETE. */

@@ -7,8 +7,11 @@ import http, { type RefinedResponse } from 'k6/http';
 import { Counter } from 'k6/metrics';
 import type { Discipline, Member } from './members.ts';
 
+/** Workout Tracking's base URL (`WORKOUT_TRACKING_URL`, the local service by default). */
 export const WORKOUT_TRACKING_URL = __ENV.WORKOUT_TRACKING_URL || 'http://localhost:3001';
+/** Training Progress' base URL (`TRAINING_PROGRESS_URL`, the local service by default). */
 export const TRAINING_PROGRESS_URL = __ENV.TRAINING_PROGRESS_URL || 'http://localhost:3002';
+/** Billing's base URL (`BILLING_URL`, the local service by default). */
 export const BILLING_URL = __ENV.BILLING_URL || 'http://localhost:3003';
 
 /** Responses with a 5xx status. */
@@ -18,6 +21,7 @@ export const graphqlErrors = new Counter('graphql_errors');
 
 /** A response's JSON body, as the API documents it: k6 parses it, nothing checks its shape. */
 export function body<T>(response: RefinedResponse<'text'>): T {
+  // The caller names the shape of the API response it expects; k6 parses it as untyped JSON.
   return response.json() as unknown as T;
 }
 
@@ -49,12 +53,14 @@ export interface WorkoutPage {
 
 /** A page of a member's training log, newest first (a GraphQL connection). */
 export interface TrainingLogPage {
-  edges: { node: { id: string; startedAt: string } }[];
+  edges: Array<{ node: { id: string; startedAt: string } }>;
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
 }
 
+/** The goal metrics the load tests set goals with. */
 export type GoalMetric = 'DISTANCE' | 'DURATION' | 'CALORIES' | 'WORKOUT_COUNT';
 
+/** The input of the `setTrainingGoal` mutation, as the load tests send it. */
 export interface SetTrainingGoalInput {
   memberId: string;
   metric: GoalMetric;
@@ -63,11 +69,13 @@ export interface SetTrainingGoalInput {
   endsOn: string;
 }
 
+/** An error in a GraphQL response. */
 export interface GraphQLError {
   message: string;
   extensions?: { code?: string };
 }
 
+/** A GraphQL response: its data, or its errors. */
 export interface GraphQLResponse<T> {
   data?: T;
   errors?: GraphQLError[];
@@ -115,6 +123,7 @@ function graphql<T = unknown>(operationName: string, query: string, variables: R
 
 // --- Workout Tracking (REST), internal routes
 
+/** The Workout Tracking requests the load tests make. */
 export const workoutTracking = {
   /** A member's workouts, newest first: `{ workouts, nextCursor }`. */
   workouts(member: Member, limit = 20, cursor = ''): WorkoutPage {
@@ -181,6 +190,7 @@ const SET_TRAINING_GOAL = `mutation SetTrainingGoal($input: SetTrainingGoalInput
   setTrainingGoal(input: $input) { id status progress }
 }`;
 
+/** The Training Progress requests the load tests make. */
 export const trainingProgress = {
   memberProgress: (member: Member) => graphql('MemberProgress', MEMBER_PROGRESS, { id: member.id }),
   trainingLog: (member: Member, first = 20, after = '') =>
@@ -193,6 +203,7 @@ export const trainingProgress = {
 
 // --- Billing (REST): a member's membership and ledger, as the member app's membership page reads them
 
+/** The Billing requests the load tests make. */
 export const billing = {
   /** The seeded members each have a monthly membership (seed.sh). */
   membership: (member: Member) => rest('GET', `${BILLING_URL}/v1/members/${member.id}/membership`, null, 'GET /v1/members/:memberId/membership', [200]),

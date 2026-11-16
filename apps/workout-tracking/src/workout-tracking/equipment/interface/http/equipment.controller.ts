@@ -12,6 +12,7 @@ import { SerialNumber } from '../../domain/values/serial-number.js';
 import { PairEquipmentDto } from './dto/pair-equipment.dto.js';
 import { RegisterEquipmentDto } from './dto/register-equipment.dto.js';
 
+/** REST endpoints to register, pair, unpair and read equipment. */
 @Controller({ path: 'equipment', version: '1' })
 export class EquipmentController {
   constructor(

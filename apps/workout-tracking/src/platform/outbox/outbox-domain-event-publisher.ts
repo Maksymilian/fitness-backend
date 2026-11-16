@@ -33,6 +33,7 @@ export class OutboxDomainEventPublisher extends DomainEventPublisher {
       })),
     );
     if (messages.length > 0) {
+      // The Transaction handle is the Drizzle transaction this service opened (Transactions).
       await this.outbox.add(tx as unknown as DrizzleTransaction, messages);
     }
   }

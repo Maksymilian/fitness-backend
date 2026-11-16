@@ -5,6 +5,7 @@ import { MemberId } from '../../../equipment/domain/values/member-id.js';
 import { ListMemberWorkoutsQuery } from '../../application/queries/list-member-workouts.query.js';
 import { ListMemberWorkoutsDto } from './dto/list-member-workouts.dto.js';
 
+/** REST endpoint for a member's workouts. */
 @Controller({ path: 'members/:memberId/workouts', version: '1' })
 export class MemberWorkoutsController {
   constructor(private readonly queryBus: QueryBus) {}

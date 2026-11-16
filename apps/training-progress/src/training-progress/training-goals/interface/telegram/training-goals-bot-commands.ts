@@ -152,9 +152,11 @@ export class TrainingGoalsBotCommands implements OnModuleInit {
     const goalTarget = GoalTarget.of(Number(target));
     if (kind === undefined) {
       const keyboard = new InlineKeyboard();
-      for (const [periodKind, label] of Object.entries(PERIODS) as [PeriodKind, string][]) {
+      for (const [periodKind, label] of Object.entries(PERIODS) as Array<[PeriodKind, string]>) {
         const period = TrainingPeriod.containing(periodKind, new Date());
-        keyboard.text(`${label}, ${format.days(period.start, period.end)}`, `${SET_GOAL}:${metric}:${discipline}:${target}:${periodKind}:${isoDay(period.start)}`).row();
+        keyboard
+          .text(`${label}, ${format.days(period.start, period.end)}`, `${SET_GOAL}:${metric}:${discipline}:${target}:${periodKind}:${isoDay(period.start)}`)
+          .row();
       }
       return ctx.editMessageText(`Set a goal: ${name({ metric, target: goalTarget.value, discipline: goalDiscipline?.value ?? null })} by when?`, {
         reply_markup: cancel(keyboard),

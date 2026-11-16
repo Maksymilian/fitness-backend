@@ -1,5 +1,6 @@
 import { UnknownDiscipline } from '../errors/unknown-discipline.js';
 
+/** How a discipline is stored and published. */
 export type DisciplineName = 'CYCLING' | 'RUNNING' | 'WALKING' | 'ROWING';
 
 /** The kind of exercise a logged workout is. Training Progress' own, translated from the upstream string. */

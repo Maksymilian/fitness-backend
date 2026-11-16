@@ -3,6 +3,7 @@ import { WorkoutNotFound } from '../../domain/errors/workout-not-found.js';
 import { GetWorkoutQuery } from './get-workout.query.js';
 import { WorkoutQueries } from './workout-queries.js';
 
+/** Answers a `GetWorkoutQuery` from SQL. */
 @QueryHandler(GetWorkoutQuery)
 export class GetWorkoutHandler implements IQueryHandler<GetWorkoutQuery> {
   constructor(private readonly workoutQueries: WorkoutQueries) {}

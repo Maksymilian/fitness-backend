@@ -10,6 +10,7 @@ export const BillingTopics = {
   membershipEndedV1: 'billing.integration.membership-ended.v1',
 } as const;
 
+/** One of Billing's integration event topics. */
 export type BillingTopic = (typeof BillingTopics)[keyof typeof BillingTopics];
 
 /** Matches every Billing integration event, for a queue binding. */

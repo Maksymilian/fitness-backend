@@ -3,6 +3,7 @@ import { DisciplineEnum } from '../../../training-log/interface/graphql/discipli
 import { LoggedWorkoutType } from '../../../training-log/interface/graphql/logged-workout.type.js';
 import { RecordMetricEnum } from './record-metric.enum.js';
 
+/** A personal record in the GraphQL schema. */
 @ObjectType('PersonalRecord')
 export class PersonalRecordType {
   @Field(() => DisciplineEnum)

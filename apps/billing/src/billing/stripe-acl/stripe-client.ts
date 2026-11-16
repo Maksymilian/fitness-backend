@@ -11,6 +11,7 @@ export const PLAN_LOOKUP_KEYS = { MONTHLY: 'membership-monthly', YEARLY: 'member
 /** The subscription metadata Billing sets at checkout: Stripe copies it onto every invoice. */
 export const METADATA = { memberId: 'member_id', plan: 'membership_plan' } as const;
 
+/** Provides the Stripe client under `STRIPE_CLIENT`, or `null` without `STRIPE_SECRET_KEY`. */
 export const stripeClientProvider = {
   provide: STRIPE_CLIENT,
   inject: [ConfigService],

@@ -1,5 +1,6 @@
 import { generateId, isUuid } from '@app/ddd';
 
+/** Identifies a training goal: a UUIDv7 the domain generates. */
 export class TrainingGoalId {
   private constructor(readonly value: string) {}
 

@@ -1,5 +1,6 @@
 import type { WorkoutMetrics } from '../../../training-log/domain/values/workout-metrics.js';
 
+/** How a record metric is stored and published. */
 export type RecordMetricName = 'LONGEST_DISTANCE' | 'LONGEST_DURATION' | 'MOST_CALORIES';
 
 /** What a personal record measures, and how to read it from a workout's metrics. */

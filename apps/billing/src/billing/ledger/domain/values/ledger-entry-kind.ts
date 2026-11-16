@@ -1,3 +1,4 @@
+/** How a ledger entry kind is stored and published. */
 export type LedgerEntryKindName = 'PAYMENT' | 'REFUND';
 
 /** A `Payment`: money a member paid, or a `Refund`: money given back to them. */

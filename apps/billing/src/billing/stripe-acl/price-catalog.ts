@@ -10,7 +10,7 @@ import { PLAN_LOOKUP_KEYS, STRIPE_CLIENT } from './stripe-client.js';
  */
 @Injectable()
 export class PriceCatalog {
-  #prices?: Promise<Map<string, MembershipPlan>>;
+  private pricesLoading?: Promise<Map<string, MembershipPlan>>;
 
   constructor(@Inject(STRIPE_CLIENT) private readonly stripe: Stripe | null) {}
 
@@ -30,11 +30,11 @@ export class PriceCatalog {
   }
 
   private prices(): Promise<Map<string, MembershipPlan>> {
-    this.#prices ??= this.load().catch((error: unknown) => {
-      this.#prices = undefined; // try again at the next call
+    this.pricesLoading ??= this.load().catch((error: unknown) => {
+      this.pricesLoading = undefined; // try again at the next call
       throw error;
     });
-    return this.#prices;
+    return this.pricesLoading;
   }
 
   private async load(): Promise<Map<string, MembershipPlan>> {
@@ -42,13 +42,16 @@ export class PriceCatalog {
       return new Map();
     }
     const { data } = await this.stripe.prices.list({ lookup_keys: Object.values(PLAN_LOOKUP_KEYS), active: true, limit: 10 });
-    return new Map(data.flatMap((price) => {
-      const plan = planOfLookupKey(price.lookup_key);
-      return plan ? [[price.id, plan] as const] : [];
-    }));
+    return new Map(
+      data.flatMap((price) => {
+        const plan = planOfLookupKey(price.lookup_key);
+        return plan ? [[price.id, plan] as const] : [];
+      }),
+    );
   }
 }
 
+/** Translates a Stripe price lookup key into a membership plan, or `undefined` for a price Billing doesn't sell. */
 export function planOfLookupKey(lookupKey: string | null | undefined): MembershipPlan | undefined {
   if (lookupKey === PLAN_LOOKUP_KEYS.MONTHLY) return MembershipPlan.Monthly;
   if (lookupKey === PLAN_LOOKUP_KEYS.YEARLY) return MembershipPlan.Yearly;

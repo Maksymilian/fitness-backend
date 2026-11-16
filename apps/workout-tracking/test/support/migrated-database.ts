@@ -17,7 +17,9 @@ export async function migratedDatabase(): Promise<MigratedDatabase> {
   const container = await new PostgreSqlContainer('postgres:18.6-alpine').start();
   const pool = new Pool({ connectionString: container.getConnectionUri() }) as MigratedDatabase;
   try {
-    for (const file of readdirSync(CHANGESETS).filter((name) => name.endsWith('.sql')).sort()) {
+    for (const file of readdirSync(CHANGESETS)
+      .filter((name) => name.endsWith('.sql'))
+      .sort()) {
       await pool.query(readFileSync(join(CHANGESETS, file), 'utf8'));
     }
   } catch (error) {

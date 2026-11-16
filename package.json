@@ -12,7 +12,7 @@
   "scripts": {
     "build": "pnpm check:architecture && nest build workout-tracking && nest build training-progress && nest build billing",
     "check:architecture": "depcruise --config .dependency-cruiser.cjs apps libs",
-    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"load-tests/**/*.ts\"",
     "lint": "oxlint --type-aware apps/ libs/ && pnpm typecheck && pnpm check:architecture",
     "typecheck": "tsc --noEmit -p libs/ddd/tsconfig.lib.json && tsc --noEmit -p libs/telemetry/tsconfig.lib.json && tsc --noEmit -p libs/workout-tracking-contracts/tsconfig.lib.json && tsc --noEmit -p libs/billing-contracts/tsconfig.lib.json && tsc --noEmit -p apps/workout-tracking/tsconfig.app.json && tsc --noEmit -p apps/training-progress/tsconfig.app.json && tsc --noEmit -p apps/billing/tsconfig.app.json && tsc --noEmit -p load-tests/tsconfig.json",
     "start:dev": "nest start --watch",

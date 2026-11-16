@@ -9,6 +9,7 @@ import { PersonalRecord } from './values/personal-record.js';
 import type { RecordCandidate } from './values/record-candidate.js';
 import { RecordMetric } from './values/record-metric.js';
 
+/** The domain events a member's personal records record. */
 export type PersonalRecordsEvent = PersonalRecordSet | PersonalRecordWithdrawn;
 
 /**
@@ -17,7 +18,7 @@ export type PersonalRecordsEvent = PersonalRecordSet | PersonalRecordWithdrawn;
  * can be withdrawn.
  */
 export class PersonalRecords extends AggregateRoot<PersonalRecordsEvent> {
-  readonly #records = new Map<RecordMetric, PersonalRecord>();
+  private readonly wrappedRecords = new Map<RecordMetric, PersonalRecord>();
 
   private constructor(
     readonly memberId: MemberId,
@@ -27,7 +28,7 @@ export class PersonalRecords extends AggregateRoot<PersonalRecordsEvent> {
   ) {
     super(version);
     for (const record of records) {
-      this.#records.set(record.metric, record);
+      this.wrappedRecords.set(record.metric, record);
     }
   }
 
@@ -41,11 +42,11 @@ export class PersonalRecords extends AggregateRoot<PersonalRecordsEvent> {
   }
 
   get records(): readonly PersonalRecord[] {
-    return RecordMetric.all.flatMap((metric) => this.#records.get(metric) ?? []);
+    return RecordMetric.all.flatMap((metric) => this.wrappedRecords.get(metric) ?? []);
   }
 
   recordOf(metric: RecordMetric): PersonalRecord | undefined {
-    return this.#records.get(metric);
+    return this.wrappedRecords.get(metric);
   }
 
   /**
@@ -55,7 +56,7 @@ export class PersonalRecords extends AggregateRoot<PersonalRecordsEvent> {
   consider(loggedWorkoutId: LoggedWorkoutId, startedAt: Date, metrics: WorkoutMetrics, now: Date): void {
     for (const metric of RecordMetric.all) {
       const value = metric.of(metrics);
-      const current = this.#records.get(metric);
+      const current = this.wrappedRecords.get(metric);
       if (value > 0 && (!current || current.isBeatenBy(value))) {
         this.set(new PersonalRecord(metric, value, loggedWorkoutId, startedAt), current ?? null, now);
       }
@@ -70,7 +71,7 @@ export class PersonalRecords extends AggregateRoot<PersonalRecordsEvent> {
   recalculate(candidates: readonly RecordCandidate[], now: Date): void {
     for (const metric of RecordMetric.all) {
       const candidate = candidates.find((c) => c.metric.equals(metric) && c.value > 0)?.toPersonalRecord() ?? null;
-      const current = this.#records.get(metric) ?? null;
+      const current = this.wrappedRecords.get(metric) ?? null;
       if (!current) {
         if (candidate) this.set(candidate, null, now);
       } else if (!candidate || candidate.value < current.value) {
@@ -85,15 +86,15 @@ export class PersonalRecords extends AggregateRoot<PersonalRecordsEvent> {
   }
 
   private set(record: PersonalRecord, previous: PersonalRecord | null, now: Date): void {
-    this.#records.set(record.metric, record);
+    this.wrappedRecords.set(record.metric, record);
     this.record(new PersonalRecordSet(this.memberId, this.discipline, record, previous, now));
   }
 
   private withdraw(withdrawn: PersonalRecord, fallback: PersonalRecord | null, now: Date): void {
     if (fallback) {
-      this.#records.set(withdrawn.metric, fallback);
+      this.wrappedRecords.set(withdrawn.metric, fallback);
     } else {
-      this.#records.delete(withdrawn.metric);
+      this.wrappedRecords.delete(withdrawn.metric);
     }
     this.record(new PersonalRecordWithdrawn(this.memberId, this.discipline, withdrawn.metric, withdrawn, fallback, now));
   }

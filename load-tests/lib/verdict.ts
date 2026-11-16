@@ -9,7 +9,16 @@ import encoding from 'k6/encoding';
 import http, { type RefinedResponse } from 'k6/http';
 import { Counter } from 'k6/metrics';
 import type { Threshold } from 'k6/options';
-import { BILLING_URL, body, type GraphQLResponse, TRAINING_PROGRESS_URL, type TrainingLogPage, type Workout, type WorkoutPage, WORKOUT_TRACKING_URL } from './api.ts';
+import {
+  BILLING_URL,
+  body,
+  type GraphQLResponse,
+  TRAINING_PROGRESS_URL,
+  type TrainingLogPage,
+  type Workout,
+  type WorkoutPage,
+  WORKOUT_TRACKING_URL,
+} from './api.ts';
 import type { Member } from './members.ts';
 
 const GRAFANA_URL = __ENV.GRAFANA_URL || 'http://localhost:3000';
@@ -32,6 +41,7 @@ const ALL_SERVICES = Object.keys(OUTBOX_ADMIN) as Service[];
 const SERVICES = 'workout-tracking|training-progress|billing';
 /** Billing's membership events, consumed by Training Progress for the goal allowances. */
 const BILLING_QUEUE = 'training-progress.billing';
+/** Training Progress' queue of Workout Tracking's integration events, which the verdict inspects. */
 export const QUEUE = 'training-progress.workout-tracking';
 const DEAD_LETTER_QUEUE = `${QUEUE}.dlq`;
 
@@ -57,9 +67,10 @@ const counters = {
 
 /** The verdict's thresholds, for a test's options. */
 export const VERDICT_THRESHOLDS: Record<string, Threshold[]> = Object.fromEntries(
-  ['lost_workouts', 'duplicated_workouts', 'dead_letters', 'messages_left', 'error_traces', 'error_logs', 'alerts_fired', 'checks_unavailable'].map(
-    (name) => [name, ['count==0']],
-  ),
+  ['lost_workouts', 'duplicated_workouts', 'dead_letters', 'messages_left', 'error_traces', 'error_logs', 'alerts_fired', 'checks_unavailable'].map((name) => [
+    name,
+    ['count==0'],
+  ]),
 );
 
 /** The traffic's thresholds: p95 under `p95Ms` (overall, REST and GraphQL), no failed request, no 5xx, no GraphQL error. */
@@ -92,7 +103,7 @@ interface DeadLetter {
 }
 
 interface TempoSearch {
-  traces?: { traceID: string; rootServiceName: string; rootTraceName: string }[];
+  traces?: Array<{ traceID: string; rootServiceName: string; rootTraceName: string }>;
 }
 
 interface LokiQuery<R> {
@@ -107,7 +118,7 @@ interface AlertAnnotation {
 
 /** The alerts firing or pending now, from Grafana's Prometheus-style API. */
 interface GrafanaAlerts {
-  data: { alerts: { labels: { alertname: string }; state: string }[] };
+  data: { alerts: Array<{ labels: { alertname: string }; state: string }> };
 }
 
 const VERDICT_TAGS = { phase: 'verdict' };
@@ -116,7 +127,9 @@ function get(url: string, headers: Record<string, string> = {}) {
   return http.get(url, { headers, tags: { ...VERDICT_TAGS, name: 'verdict' }, responseCallback: http.expectedStatuses(200) });
 }
 
-const basic = (credentials: string) => ({ Authorization: `Basic ${encoding.b64encode(credentials)}` });
+function basic(credentials: string) {
+  return { Authorization: `Basic ${encoding.b64encode(credentials)}` };
+}
 
 /** `fn()`'s result, or undefined after counting the check as unavailable. */
 function attempt<T>(what: string, fn: () => T): T | undefined {
@@ -164,6 +177,7 @@ export function snapshot(since = new Date(), deadLetterQueue?: number) {
   };
 }
 
+/** The counts the verdict takes before and after a run, to reconcile. */
 export type Snapshot = ReturnType<typeof snapshot>;
 
 // --- Workouts: recorded in Workout Tracking, logged in Training Progress
@@ -207,6 +221,7 @@ function loggedWorkoutIds(member: Member, since: string): string[] {
     if (result.errors) {
       throw new Error(`training log: ${JSON.stringify(result.errors[0])}`);
     }
+    // A GraphQL response without errors carries data.
     const { edges, pageInfo } = result.data!.member.trainingLog;
     for (const { node } of edges) {
       if (node.startedAt < since) {
@@ -257,7 +272,9 @@ export function reconcile(members: Member[], runId: string, since: string): numb
   if (missing.length === 0) {
     console.log(`✓ workouts: all ${total} recorded for ${members.length} members are in their training logs (waited ${seconds} s)`);
   } else {
-    console.error(`✗ workouts: ${missing.length} of ${total} recorded never reached the training log within ${RECONCILE_TIMEOUT_S} s, e.g. ${missing.slice(0, 3).join(', ')}`);
+    console.error(
+      `✗ workouts: ${missing.length} of ${total} recorded never reached the training log within ${RECONCILE_TIMEOUT_S} s, e.g. ${missing.slice(0, 3).join(', ')}`,
+    );
   }
   if (duplicated + loggedTwice > 0) {
     console.error(`✗ workouts: ${duplicated} recordings made two workouts, ${loggedTwice} workouts are logged twice`);
@@ -289,7 +306,12 @@ function deadLetters(start: Snapshot, services: readonly Service[]): void {
   if (count === 0) {
     console.log(`✓ dead letters: none new (${Object.keys(added).join(', ')})`);
   } else {
-    console.error(`✗ dead letters: ${Object.entries(added).filter(([, n]) => n > 0).map(([where, n]) => `${n} new in ${where}`).join(', ')}`);
+    console.error(
+      `✗ dead letters: ${Object.entries(added)
+        .filter(([, n]) => n > 0)
+        .map(([where, n]) => `${n} new in ${where}`)
+        .join(', ')}`,
+    );
   }
 }
 
@@ -357,7 +379,7 @@ function errorLogs(fromMs: number, toMs: number): void {
     if (count === 0) {
       console.log('✓ logs: no error (Loki)');
     } else {
-      const lines = grafana<LokiQuery<{ stream: { service_name: string }; values: [string, string][] }>>(
+      const lines = grafana<LokiQuery<{ stream: { service_name: string }; values: Array<[string, string]> }>>(
         `/api/datasources/proxy/uid/loki/loki/api/v1/query_range?query=${encodeURIComponent(selector)}&start=${fromMs * 1e6}&end=${toMs * 1e6}&limit=3`,
       ).data.result.flatMap((stream) => stream.values.map(([, line]) => `${stream.stream.service_name}: ${line.slice(0, 200)}`));
       console.error(`✗ logs: ${count} errors, in Loki: ${selector}; e.g.\n  ${lines.join('\n  ')}`);
@@ -439,4 +461,6 @@ export function judgeBacklog(start: Snapshot, { members, runId }: { members: Mem
 }
 
 /** The run's id, which starts its recording ids: k6.sh's TEST_ID (`stress-20261016T184500Z`, also k6's `testid` tag), else `run-<time>`. */
-export const newRunId = (): string => __ENV.TEST_ID || `run-${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}`;
+export function newRunId(): string {
+  return __ENV.TEST_ID || `run-${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}`;
+}

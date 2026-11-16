@@ -18,7 +18,7 @@ export const STRIPE_EVENT_TYPES = ['invoice.paid', 'charge.refunded', 'customer.
 
 /** What a Stripe event is in Billing's language: commands, or nothing, with why. */
 export type StripeEventTranslation =
-  | { commands: (RecordPaymentCommand | RecordRefundCommand | ChangeMembershipCommand)[]; customer?: { memberId: string; customerReference: string } }
+  | { commands: Array<RecordPaymentCommand | RecordRefundCommand | ChangeMembershipCommand>; customer?: { memberId: string; customerReference: string } }
   | { commands: []; ignored: string };
 
 const ignore = (ignored: string): StripeEventTranslation => ({ commands: [], ignored });

@@ -1,7 +1,10 @@
 import { IsDateString, IsIn, IsInt, IsNotEmpty, IsString, IsUUID, Max, Min } from 'class-validator';
 
+/** The equipment types of the published language, version 1. */
 export const EQUIPMENT_TYPES_V1 = ['BIKE', 'TREADMILL', 'ROWER'] as const;
+/** The disciplines of the published language, version 1. */
 export const DISCIPLINES_V1 = ['CYCLING', 'RUNNING', 'WALKING', 'ROWING'] as const;
+/** The workout statuses of the published language, version 1. */
 export const WORKOUT_STATUSES_V1 = ['RECORDED', 'VOIDED'] as const;
 
 /**

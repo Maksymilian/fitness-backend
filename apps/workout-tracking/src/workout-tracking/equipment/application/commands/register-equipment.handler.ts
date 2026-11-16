@@ -6,6 +6,7 @@ import { EquipmentRepository } from '../../domain/equipment.repository.js';
 import { representEquipment } from '../equipment.representation.interface.js';
 import { RegisterEquipmentCommand } from './register-equipment.command.js';
 
+/** Registers equipment: creates it, saves it and stages its events in one transaction. */
 @CommandHandler(RegisterEquipmentCommand)
 export class RegisterEquipmentHandler implements ICommandHandler<RegisterEquipmentCommand> {
   constructor(

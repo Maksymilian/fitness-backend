@@ -7,7 +7,11 @@ describe('RateLimitFilter', () => {
   /** The host of a GraphQL root field: Apollo's context (args[2]) has the request, linked to its response. */
   function graphqlHost(retryAfter: number | undefined): ArgumentsHost {
     const context = { req: { res: { getHeader: (name: string) => (name === 'Retry-After' ? retryAfter : undefined) } } };
-    return { getType: () => 'graphql', getArgs: () => [{}, {}, context, {}], getArgByIndex: (index: number) => [{}, {}, context, {}][index] } as unknown as ArgumentsHost;
+    return {
+      getType: () => 'graphql',
+      getArgs: () => [{}, {}, context, {}],
+      getArgByIndex: (index: number) => [{}, {}, context, {}][index],
+    } as unknown as ArgumentsHost;
   }
 
   it('reports the rejection over GraphQL as TOO_MANY_REQUESTS, with when to try again, and answers 429', () => {

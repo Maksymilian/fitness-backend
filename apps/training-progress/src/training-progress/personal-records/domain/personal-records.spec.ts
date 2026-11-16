@@ -13,8 +13,9 @@ const first = LoggedWorkoutId.from('0199c3a2-0000-7000-8000-000000000101');
 const second = LoggedWorkoutId.from('0199c3a2-0000-7000-8000-000000000102');
 const firstStart = new Date('2026-10-01T08:00:00Z');
 const secondStart = new Date('2026-10-02T08:00:00Z');
-const metrics = (distanceMeters: number, durationSeconds: number, calories: number) =>
-  WorkoutMetrics.of({ distanceMeters, durationSeconds, calories });
+function metrics(distanceMeters: number, durationSeconds: number, calories: number) {
+  return WorkoutMetrics.of({ distanceMeters, durationSeconds, calories });
+}
 
 function adaCycling(): PersonalRecords {
   return PersonalRecords.startFor(MemberId.from('ada@example.com'), Discipline.Cycling);
@@ -73,14 +74,17 @@ describe('PersonalRecords', () => {
   });
 
   describe('recalculate', () => {
-    const candidate = (metric: RecordMetric, value: number, id = first, startedAt = firstStart) =>
-      new RecordCandidate(metric, value, id, startedAt);
+    const candidate = (metric: RecordMetric, value: number, id = first, startedAt = firstStart) => new RecordCandidate(metric, value, id, startedAt);
 
     it('withdraws a record whose workout was revised lower, falling back to the next best', () => {
       const records = withRecordsFromFirstWorkout();
 
       records.recalculate(
-        [candidate(RecordMetric.LongestDistance, 15_000, second, secondStart), candidate(RecordMetric.LongestDuration, 3600), candidate(RecordMetric.MostCalories, 600)],
+        [
+          candidate(RecordMetric.LongestDistance, 15_000, second, secondStart),
+          candidate(RecordMetric.LongestDuration, 3600),
+          candidate(RecordMetric.MostCalories, 600),
+        ],
         now,
       );
 
@@ -118,7 +122,11 @@ describe('PersonalRecords', () => {
       const records = withRecordsFromFirstWorkout();
 
       records.recalculate(
-        [candidate(RecordMetric.LongestDistance, 20_000, second, secondStart), candidate(RecordMetric.LongestDuration, 3600), candidate(RecordMetric.MostCalories, 600)],
+        [
+          candidate(RecordMetric.LongestDistance, 20_000, second, secondStart),
+          candidate(RecordMetric.LongestDuration, 3600),
+          candidate(RecordMetric.MostCalories, 600),
+        ],
         now,
       );
 
@@ -130,7 +138,10 @@ describe('PersonalRecords', () => {
     it('changes nothing when the candidates are the records', () => {
       const records = withRecordsFromFirstWorkout();
 
-      records.recalculate([candidate(RecordMetric.LongestDistance, 20_000), candidate(RecordMetric.LongestDuration, 3600), candidate(RecordMetric.MostCalories, 600)], now);
+      records.recalculate(
+        [candidate(RecordMetric.LongestDistance, 20_000), candidate(RecordMetric.LongestDuration, 3600), candidate(RecordMetric.MostCalories, 600)],
+        now,
+      );
 
       expect(records.pullDomainEvents()).toEqual([]);
     });

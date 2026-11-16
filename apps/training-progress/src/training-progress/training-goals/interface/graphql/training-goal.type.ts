@@ -3,6 +3,7 @@ import { DisciplineEnum } from '../../../training-log/interface/graphql/discipli
 import { GoalMetricEnum } from './goal-metric.enum.js';
 import { GoalStatusEnum } from './goal-status.enum.js';
 
+/** A training goal in the GraphQL schema, with its progress. */
 @ObjectType('TrainingGoal')
 export class TrainingGoalType {
   @Field(() => ID)

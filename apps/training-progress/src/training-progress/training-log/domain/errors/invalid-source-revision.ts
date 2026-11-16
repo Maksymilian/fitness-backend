@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when an upstream revision number isn't a positive whole number. */
 export class InvalidSourceRevision extends DomainError {
   readonly kind = 'invariant-violation';
 

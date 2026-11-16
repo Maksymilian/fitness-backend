@@ -7,7 +7,9 @@ import { GoalAllowance } from './goal-allowance.js';
 
 const grace = MemberId.from('grace@example.com');
 const now = new Date('2026-10-30T10:00:00Z');
-const revision = (value: number) => SourceRevision.of(value);
+function revision(value: number) {
+  return SourceRevision.of(value);
+}
 
 describe('GoalAllowance', () => {
   it('permits one active goal to a member without a membership', () => {

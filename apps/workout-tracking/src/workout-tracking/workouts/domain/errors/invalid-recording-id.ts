@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a recording id is empty or malformed. */
 export class InvalidRecordingId extends DomainError {
   readonly kind = 'invariant-violation';
 

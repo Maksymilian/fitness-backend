@@ -18,6 +18,7 @@ export class Transactions {
   ) {}
 
   async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+    // The domain sees the Drizzle transaction only as its opaque Transaction handle (libs/ddd).
     const result = await this.db.transaction((tx) => work(tx as unknown as Transaction));
     this.outbox.notify();
     return result;
@@ -28,8 +29,9 @@ export class Transactions {
    * transaction as the work's writes, and a redelivered message finds it and skips the work.
    */
   async runOnce<T>(consumer: string, messageId: string, work: (tx: Transaction) => Promise<T>): Promise<OutboxInboxResult<T>> {
+    // As in run(): the domain sees the Drizzle transaction as its opaque Transaction handle.
     const outcome = await this.db.transaction((tx) =>
-      Promise.resolve(this.inbox.processInTransaction(tx, consumer, messageId, () => work(tx as unknown as Transaction))),
+      Promise.try(() => this.inbox.processInTransaction(tx, consumer, messageId, () => work(tx as unknown as Transaction))),
     );
     this.outbox.notify();
     return outcome as OutboxInboxResult<T>;

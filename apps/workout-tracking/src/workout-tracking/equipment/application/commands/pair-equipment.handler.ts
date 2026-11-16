@@ -5,6 +5,7 @@ import { EquipmentRepository } from '../../domain/equipment.repository.js';
 import { representEquipment } from '../equipment.representation.interface.js';
 import { PairEquipmentCommand } from './pair-equipment.command.js';
 
+/** Pairs equipment with a member: loads it, calls `pair`, saves it and stages its events in one transaction. */
 @CommandHandler(PairEquipmentCommand)
 export class PairEquipmentHandler implements ICommandHandler<PairEquipmentCommand> {
   constructor(

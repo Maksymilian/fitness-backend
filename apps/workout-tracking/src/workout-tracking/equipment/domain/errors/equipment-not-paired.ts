@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when equipment that isn't paired with a member is asked for something that needs one. */
 export class EquipmentNotPaired extends DomainError {
   readonly kind = 'conflict';
 

@@ -47,7 +47,9 @@ export const workoutCorrections = pgTable(
     previousMetrics: jsonb('previous_metrics').notNull(),
     newMetrics: jsonb('new_metrics').notNull(),
     reason: text().notNull(),
-    correctedAt: timestamp('corrected_at', { withTimezone: true }).notNull().default(sql`now()`),
+    correctedAt: timestamp('corrected_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
   },
   (table) => [primaryKey({ columns: [table.workoutId, table.revision] })],
 );

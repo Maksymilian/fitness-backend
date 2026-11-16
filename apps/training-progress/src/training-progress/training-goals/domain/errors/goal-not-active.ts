@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a goal that is achieved, missed or abandoned is asked to change. */
 export class GoalNotActive extends DomainError {
   readonly kind = 'conflict';
 

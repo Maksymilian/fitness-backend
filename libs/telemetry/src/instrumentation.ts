@@ -23,7 +23,7 @@ import { ExpressLayerType } from '@opentelemetry/instrumentation-express';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import {BatchSpanProcessor, ConsoleSpanExporter} from '@opentelemetry/sdk-trace-base';
+import { BatchSpanProcessor, ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base';
 import { FLOW_ID } from './flow.js';
 import { INTERFACE } from './interface.js';
 
@@ -54,8 +54,12 @@ process.env.OTEL_SEMCONV_STABILITY_OPT_IN ??= 'http';
 process.env.OTEL_NODE_ENABLED_INSTRUMENTATIONS ??= 'http,express,nestjs-core,graphql,pg,redis,amqplib,undici,runtime-node';
 
 const HEALTH_CHECK = /\/health\/(live|ready)$/;
-const isCarried = (key: string) => key === FLOW_ID || key === INTERFACE;
-const sends = (signal: 'TRACES' | 'METRICS' | 'LOGS') => process.env[`OTEL_${signal}_EXPORTER`] !== 'none';
+function isCarried(key: string) {
+  return key === FLOW_ID || key === INTERFACE;
+}
+function sends(signal: 'TRACES' | 'METRICS' | 'LOGS') {
+  return process.env[`OTEL_${signal}_EXPORTER`] !== 'none';
+}
 
 new NodeSDK({
   // The flow id and the interface go on every span and log record, from the baggage.

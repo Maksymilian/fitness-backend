@@ -32,9 +32,6 @@ export class AppModule {}
  * assets copy them next to the bundle, which keeps their path from the repository root.
  */
 function mailTemplatesDirectory(): string {
-  const candidates = [
-    join(import.meta.dirname, 'notifications/templates'),
-    join(import.meta.dirname, 'apps/training-progress/src/notifications/templates'),
-  ];
+  const candidates = [join(import.meta.dirname, 'notifications/templates'), join(import.meta.dirname, 'apps/training-progress/src/notifications/templates')];
   return candidates.find((directory) => existsSync(directory)) ?? candidates[0];
 }

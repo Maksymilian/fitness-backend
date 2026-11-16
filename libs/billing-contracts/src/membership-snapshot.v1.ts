@@ -1,6 +1,8 @@
 import { IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsString, IsUUID, Min } from 'class-validator';
 
+/** The membership plans of the published language, version 1. */
 export const MEMBERSHIP_PLANS_V1 = ['MONTHLY', 'YEARLY'] as const;
+/** The membership statuses of the published language, version 1. */
 export const MEMBERSHIP_STATUSES_V1 = ['ACTIVE', 'ENDED'] as const;
 
 /**

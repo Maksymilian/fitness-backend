@@ -20,6 +20,7 @@ import { WorkoutRepository } from '../domain/workout.repository.js';
 
 type WorkoutRow = typeof workouts.$inferSelect;
 
+/** Stores workouts and their corrections in PostgreSQL with Drizzle, with optimistic locking on `revision`. */
 @Injectable()
 export class DrizzleWorkoutRepository extends WorkoutRepository {
   constructor(@InjectDrizzle() private readonly db: Database) {

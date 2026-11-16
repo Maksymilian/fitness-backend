@@ -32,21 +32,49 @@ describe('LedgerEntry', () => {
   });
 
   it('records a payment of 0.00: a fully discounted period', () => {
-    const entry = LedgerEntry.recordPayment({ memberId, amount: Money.of('0', Currency.EUR), occurredAt: now, providerReference: ProviderReference.from('in_2'), paidFor, now });
+    const entry = LedgerEntry.recordPayment({
+      memberId,
+      amount: Money.of('0', Currency.EUR),
+      occurredAt: now,
+      providerReference: ProviderReference.from('in_2'),
+      paidFor,
+      now,
+    });
 
     expect(entry.pullDomainEvents()).toEqual([expect.any(PaymentRecorded)]);
   });
 
   it('records a refund as an entry of its own', () => {
-    const entry = LedgerEntry.recordRefund({ memberId, amount: Money.of('5.00', Currency.EUR), occurredAt: now, providerReference: ProviderReference.from('ch_1:500'), now });
+    const entry = LedgerEntry.recordRefund({
+      memberId,
+      amount: Money.of('5.00', Currency.EUR),
+      occurredAt: now,
+      providerReference: ProviderReference.from('ch_1:500'),
+      now,
+    });
 
     expect(entry.pullDomainEvents()).toEqual([expect.any(RefundRecorded)]);
     expect(entry.props).toMatchObject({ kind: LedgerEntryKind.Refund, paidFor: null });
   });
 
   it.each([
-    ['a negative payment', () => LedgerEntry.recordPayment({ memberId, amount: Money.of('-1', Currency.EUR), occurredAt: now, providerReference: ProviderReference.from('in_3'), paidFor, now })],
-    ['a refund of nothing', () => LedgerEntry.recordRefund({ memberId, amount: Money.of('0', Currency.EUR), occurredAt: now, providerReference: ProviderReference.from('ch_2:0'), now })],
+    [
+      'a negative payment',
+      () =>
+        LedgerEntry.recordPayment({
+          memberId,
+          amount: Money.of('-1', Currency.EUR),
+          occurredAt: now,
+          providerReference: ProviderReference.from('in_3'),
+          paidFor,
+          now,
+        }),
+    ],
+    [
+      'a refund of nothing',
+      () =>
+        LedgerEntry.recordRefund({ memberId, amount: Money.of('0', Currency.EUR), occurredAt: now, providerReference: ProviderReference.from('ch_2:0'), now }),
+    ],
   ])('refuses %s', (_, record) => {
     expect(record).toThrow(InvalidLedgerEntryAmount);
   });

@@ -17,6 +17,7 @@ export class Transactions {
   ) {}
 
   async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+    // The domain sees the Drizzle transaction only as its opaque Transaction handle (libs/ddd).
     const result = await this.db.transaction((tx) => work(tx as unknown as Transaction));
     this.outbox.notify();
     return result;

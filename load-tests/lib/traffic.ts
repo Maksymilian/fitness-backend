@@ -5,8 +5,12 @@ import exec from 'k6/execution';
 import { billing, type Recording, trainingProgress, workoutTracking } from './api.ts';
 import { anyMember, anyWriter, type Discipline, type Member } from './members.ts';
 
-const between = (first: number, last: number) => first + Math.floor(Math.random() * (last - first + 1));
-const pick = <T>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
+function between(first: number, last: number) {
+  return first + Math.floor(Math.random() * (last - first + 1));
+}
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
 
 /** Metres per second, roughly, so a recording looks like one. */
 const SPEED: Record<Discipline, number> = { CYCLING: 7.5, RUNNING: 2.9, WALKING: 1.4, ROWING: 3.4 };
@@ -54,25 +58,31 @@ function setTrainingGoal(member: Member): void {
 }
 
 /** [weight, action]: reads 95, writes 10. */
-const ACTIONS: [weight: number, action: (runId: string) => void][] = [
+const ACTIONS: Array<[weight: number, action: (runId: string) => void]> = [
   // Reads: REST
-  [10, () => {
-    // The member's history, then one workout of it, as an admin tool would.
-    const { workouts } = workoutTracking.workouts(anyMember());
-    if (workouts.length > 0) {
-      workoutTracking.workout(pick(workouts).id);
-    }
-  }],
+  [
+    10,
+    () => {
+      // The member's history, then one workout of it, as an admin tool would.
+      const { workouts } = workoutTracking.workouts(anyMember());
+      if (workouts.length > 0) {
+        workoutTracking.workout(pick(workouts).id);
+      }
+    },
+  ],
   [5, () => workoutTracking.workouts(anyMember(), 100)],
   [5, () => workoutTracking.equipment(anyMember().equipmentId)],
   // Reads: GraphQL
   [30, () => trainingProgress.memberProgress(anyMember())],
-  [15, () => {
-    const log = trainingProgress.trainingLog(anyMember());
-    if (log?.pageInfo.hasNextPage && log.pageInfo.endCursor && Math.random() < 0.3) {
-      trainingProgress.trainingLog(anyMember(), 20, log.pageInfo.endCursor);
-    }
-  }],
+  [
+    15,
+    () => {
+      const log = trainingProgress.trainingLog(anyMember());
+      if (log?.pageInfo.hasNextPage && log.pageInfo.endCursor && Math.random() < 0.3) {
+        trainingProgress.trainingLog(anyMember(), 20, log.pageInfo.endCursor);
+      }
+    },
+  ],
   [15, () => trainingProgress.progressSummaries(anyMember())],
   [10, () => trainingProgress.trainingGoals(anyMember())],
   // Reads: Billing (REST), the membership page
@@ -84,6 +94,7 @@ const ACTIONS: [weight: number, action: (runId: string) => void][] = [
 ];
 const TOTAL = ACTIONS.reduce((sum, [weight]) => sum + weight, 0);
 
+/** Makes one request of the mixed traffic, chosen at random by each request kind's weight. */
 export function mixedTraffic(runId: string): void {
   let roll = Math.random() * TOTAL;
   for (const [weight, action] of ACTIONS) {

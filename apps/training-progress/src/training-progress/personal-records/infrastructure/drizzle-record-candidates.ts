@@ -16,6 +16,7 @@ const VALUE_COLUMN = {
   MOST_CALORIES: loggedWorkouts.calories,
 } as const;
 
+/** Finds, with SQL over the training log, the counting workouts that could hold each personal record. */
 @Injectable()
 export class DrizzleRecordCandidates extends RecordCandidates {
   async best(transaction: Transaction, memberId: MemberId, discipline: Discipline, currentHolders: readonly LoggedWorkoutId[]): Promise<RecordCandidate[]> {

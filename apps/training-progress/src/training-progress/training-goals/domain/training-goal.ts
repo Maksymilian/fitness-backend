@@ -15,8 +15,10 @@ import { GoalStatus } from './values/goal-status.js';
 import type { GoalTarget } from './values/goal-target.js';
 import { TrainingGoalId } from './values/training-goal-id.js';
 
+/** The domain events a training goal records. */
 export type TrainingGoalEvent = TrainingGoalSet | GoalAchieved | GoalMissed | GoalAbandoned;
 
+/** What a training goal holds, as the repository saves and reconstitutes it. */
 export interface TrainingGoalProps {
   readonly id: TrainingGoalId;
   readonly memberId: MemberId;
@@ -36,11 +38,11 @@ export interface TrainingGoalProps {
  * 200 km in October". Only an active goal changes status; an achievement is final.
  */
 export class TrainingGoal extends AggregateRoot<TrainingGoalEvent> {
-  #props: TrainingGoalProps;
+  private wrappedProps: TrainingGoalProps;
 
   private constructor(props: TrainingGoalProps, version: number) {
     super(version);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /** A member sets a goal. The target and the period are checked by their value objects. */
@@ -66,20 +68,20 @@ export class TrainingGoal extends AggregateRoot<TrainingGoalEvent> {
   }
 
   get id(): TrainingGoalId {
-    return this.#props.id;
+    return this.wrappedProps.id;
   }
 
   get memberId(): MemberId {
-    return this.#props.memberId;
+    return this.wrappedProps.memberId;
   }
 
   get props(): TrainingGoalProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 
   /** Which logged workouts count towards this goal. The domain decides what counts; the application sums how much. */
   progressCriteria(): GoalProgressCriteria {
-    return new GoalProgressCriteria(this.#props.metric, this.#props.period, this.#props.discipline);
+    return new GoalProgressCriteria(this.wrappedProps.metric, this.wrappedProps.period, this.wrappedProps.discipline);
   }
 
   /**
@@ -87,32 +89,32 @@ export class TrainingGoal extends AggregateRoot<TrainingGoalEvent> {
    * reaches the target; otherwise nothing changes, so recording the same progress twice is harmless.
    */
   recordProgress(progress: GoalProgress, now: Date): void {
-    const { status, target, id, memberId, metric, discipline, period } = this.#props;
+    const { status, target, id, memberId, metric, discipline, period } = this.wrappedProps;
     if (!status.equals(GoalStatus.Active) || !progress.reaches(target)) {
       return;
     }
-    this.#props = { ...this.#props, status: GoalStatus.Achieved, achievedAt: now };
+    this.wrappedProps = { ...this.wrappedProps, status: GoalStatus.Achieved, achievedAt: now };
     this.record(new GoalAchieved(id, memberId, metric, target, discipline, period, now));
   }
 
   /** Misses the goal once the grace period has ended while it's still active. */
   miss(now: Date): void {
-    if (!this.#props.status.equals(GoalStatus.Active) || now < this.#props.period.graceEnd) {
+    if (!this.wrappedProps.status.equals(GoalStatus.Active) || now < this.wrappedProps.period.graceEnd) {
       return;
     }
-    this.#props = { ...this.#props, status: GoalStatus.Missed, missedAt: now };
+    this.wrappedProps = { ...this.wrappedProps, status: GoalStatus.Missed, missedAt: now };
     this.record(new GoalMissed(this.id, this.memberId, now));
   }
 
   /** The goal's member gives up the active goal. Another member's goal is not found for them. */
   abandon(memberId: MemberId, now: Date): void {
-    if (!this.#props.memberId.equals(memberId)) {
+    if (!this.wrappedProps.memberId.equals(memberId)) {
       throw new TrainingGoalNotFound(this.id.value);
     }
-    if (!this.#props.status.equals(GoalStatus.Active)) {
-      throw new GoalNotActive(this.id.value, this.#props.status.value);
+    if (!this.wrappedProps.status.equals(GoalStatus.Active)) {
+      throw new GoalNotActive(this.id.value, this.wrappedProps.status.value);
     }
-    this.#props = { ...this.#props, status: GoalStatus.Abandoned, abandonedAt: now };
+    this.wrappedProps = { ...this.wrappedProps, status: GoalStatus.Abandoned, abandonedAt: now };
     this.record(new GoalAbandoned(this.id, this.memberId, now));
   }
 }

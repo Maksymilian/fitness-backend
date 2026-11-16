@@ -8,8 +8,10 @@ import type { LoggedWorkoutId } from './values/logged-workout-id.js';
 import type { SourceRevision } from './values/source-revision.js';
 import type { WorkoutMetrics } from './values/workout-metrics.js';
 
+/** The domain events a logged workout records. */
 export type LoggedWorkoutEvent = WorkoutLogged | LoggedWorkoutRevised | LoggedWorkoutStoppedCounting;
 
+/** What a logged workout holds, as the repository saves and reconstitutes it. */
 export interface LoggedWorkoutProps {
   readonly id: LoggedWorkoutId;
   readonly memberId: MemberId;
@@ -28,20 +30,18 @@ export interface LoggedWorkoutProps {
  * one is ignored: that protects against reordering, on top of the inbox against redelivery.
  */
 export class LoggedWorkout extends AggregateRoot<LoggedWorkoutEvent> {
-  #props: LoggedWorkoutProps;
+  private wrappedProps: LoggedWorkoutProps;
 
   private constructor(props: LoggedWorkoutProps, version: number) {
     super(version);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /** Adds a workout to the member's training log. */
   static log(params: Omit<LoggedWorkoutProps, 'counts' | 'loggedAt'> & { now: Date }): LoggedWorkout {
     const { now, ...props } = params;
     const loggedWorkout = new LoggedWorkout({ ...props, counts: true, loggedAt: now }, 0);
-    loggedWorkout.record(
-      new WorkoutLogged(props.id, props.memberId, props.discipline, props.startedAt, props.metrics, now),
-    );
+    loggedWorkout.record(new WorkoutLogged(props.id, props.memberId, props.discipline, props.startedAt, props.metrics, now));
     return loggedWorkout;
   }
 
@@ -61,42 +61,42 @@ export class LoggedWorkout extends AggregateRoot<LoggedWorkoutEvent> {
   }
 
   get id(): LoggedWorkoutId {
-    return this.#props.id;
+    return this.wrappedProps.id;
   }
 
   get props(): LoggedWorkoutProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 
   /** Replaces the metrics (a correction upstream). Ignored unless the source revision is newer. */
   revise(metrics: WorkoutMetrics, sourceRevision: SourceRevision, now: Date): void {
-    if (!sourceRevision.isNewerThan(this.#props.sourceRevision)) {
+    if (!sourceRevision.isNewerThan(this.wrappedProps.sourceRevision)) {
       return;
     }
-    const previousMetrics = this.#props.metrics;
-    this.#props = { ...this.#props, metrics, sourceRevision };
-    if (!this.#props.counts || previousMetrics.equals(metrics)) {
+    const previousMetrics = this.wrappedProps.metrics;
+    this.wrappedProps = { ...this.wrappedProps, metrics, sourceRevision };
+    if (!this.wrappedProps.counts || previousMetrics.equals(metrics)) {
       return;
     }
-    const { id, memberId, discipline, startedAt } = this.#props;
+    const { id, memberId, discipline, startedAt } = this.wrappedProps;
     this.record(new LoggedWorkoutRevised(id, memberId, discipline, startedAt, previousMetrics, metrics, now));
   }
 
   /** Keeps the logged workout but excludes it from everything (a void upstream). Ignored unless the source revision is newer. */
   stopCounting(sourceRevision: SourceRevision, now: Date): void {
-    if (!sourceRevision.isNewerThan(this.#props.sourceRevision)) {
+    if (!sourceRevision.isNewerThan(this.wrappedProps.sourceRevision)) {
       return;
     }
-    const wasCounting = this.#props.counts;
-    this.#props = { ...this.#props, counts: false, sourceRevision };
+    const wasCounting = this.wrappedProps.counts;
+    this.wrappedProps = { ...this.wrappedProps, counts: false, sourceRevision };
     if (wasCounting) {
-      const { id, memberId, discipline, startedAt } = this.#props;
+      const { id, memberId, discipline, startedAt } = this.wrappedProps;
       this.record(new LoggedWorkoutStoppedCounting(id, memberId, discipline, startedAt, now));
     }
   }
 
   /** Whether the stored state is behind: a newer source revision was applied, with or without an event. */
   isChangedSinceLoaded(): boolean {
-    return this.version !== this.#props.sourceRevision.value;
+    return this.version !== this.wrappedProps.sourceRevision.value;
   }
 }

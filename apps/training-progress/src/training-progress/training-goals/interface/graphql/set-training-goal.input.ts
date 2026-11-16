@@ -4,6 +4,7 @@ import { IsDate, IsEmail, IsEnum, IsInt, IsOptional } from 'class-validator';
 import { DisciplineEnum } from '../../../training-log/interface/graphql/discipline.enum.js';
 import { GoalMetricEnum } from './goal-metric.enum.js';
 
+/** The input of the `setTrainingGoal` mutation. */
 @InputType()
 export class SetTrainingGoalInput {
   /** Until Identity exists, a member is identified by their email address (not verified). */

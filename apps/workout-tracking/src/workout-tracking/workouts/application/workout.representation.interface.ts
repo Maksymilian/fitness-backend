@@ -25,6 +25,7 @@ export interface WorkoutPage {
   nextCursor: string | null;
 }
 
+/** Turns a workout into the representation the REST API returns. */
 export function representWorkout(workout: Workout): WorkoutRepresentation {
   const p = workout.props;
   return {

@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a payment refers to a provider membership other than the member's. */
 export class PaymentForAnotherMembership extends DomainError {
   readonly kind = 'conflict';
 

@@ -12,7 +12,7 @@ const EVENT_TYPES = [
   'bulkhead-rejected',
   'rate-limited',
   'fallback',
-] as const satisfies readonly ResilienceEvent['type'][];
+] as const satisfies ReadonlyArray<ResilienceEvent['type']>;
 
 /**
  * Counts @nestjs/resilience's events (docs/architecture.md, section 16) as `resilience.events` (in

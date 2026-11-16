@@ -9,6 +9,7 @@ import { LedgerEntryId } from './values/ledger-entry-id.js';
 import { LedgerEntryKind } from './values/ledger-entry-kind.js';
 import type { Money } from './values/money.js';
 
+/** The domain events a ledger entry records. */
 export type LedgerEntryEvent = PaymentRecorded | RefundRecorded;
 
 /** What a payment paid for: a membership plan, through a date, for the provider's membership (Stripe's subscription). */
@@ -18,6 +19,7 @@ export interface PaidFor {
   readonly membershipReference: ProviderReference;
 }
 
+/** What a ledger entry holds, as the repository saves and reconstitutes it. */
 export interface LedgerEntryProps {
   readonly id: LedgerEntryId;
   readonly memberId: MemberId;
@@ -38,11 +40,11 @@ export interface LedgerEntryProps {
  * concurrently. The provider reference is unique per kind, which makes recording it twice fail.
  */
 export class LedgerEntry extends AggregateRoot<LedgerEntryEvent> {
-  readonly #props: LedgerEntryProps;
+  private readonly wrappedProps: LedgerEntryProps;
 
   private constructor(props: LedgerEntryProps, version: number) {
     super(version);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /** A member paid for their membership: zero or more (a fully discounted period is a payment of 0.00). */
@@ -80,10 +82,10 @@ export class LedgerEntry extends AggregateRoot<LedgerEntryEvent> {
   }
 
   get id(): LedgerEntryId {
-    return this.#props.id;
+    return this.wrappedProps.id;
   }
 
   get props(): LedgerEntryProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 }

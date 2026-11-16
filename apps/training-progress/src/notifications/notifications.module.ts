@@ -49,6 +49,7 @@ export class NotificationsModule {
 /** `file` in development (the default), `smtp` or `resend` in production. */
 function mailTransport(config: ConfigService<Environment, true>): MailTransport {
   switch (config.get('MAIL_TRANSPORT', { infer: true })) {
+    // validateEnvironment() requires SMTP_URL with smtp and RESEND_API_KEY with resend, so neither `!` can be undefined.
     case 'smtp':
       return new SmtpTransport({ url: config.get('SMTP_URL', { infer: true })!, pool: true });
     case 'resend':

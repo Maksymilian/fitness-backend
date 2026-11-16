@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when an amount comes in a currency Billing doesn't accept. */
 export class UnknownCurrency extends DomainError {
   readonly kind = 'invariant-violation';
 

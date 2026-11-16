@@ -15,6 +15,7 @@ const TOTAL = {
   WORKOUT_COUNT: count(),
 } as const;
 
+/** Sums the training log for a goal's progress criteria with SQL. */
 @Injectable()
 export class DrizzleTrainingLogTotals extends TrainingLogTotals {
   constructor(@InjectDrizzle() private readonly db: Database) {

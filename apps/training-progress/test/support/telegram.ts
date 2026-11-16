@@ -48,10 +48,10 @@ export function texts(calls: TelegramCall[]): string[] {
 }
 
 /** The buttons of the last message the bot sent or edited. */
-export function buttons(calls: TelegramCall[]): { text: string; callback_data: string }[] {
+export function buttons(calls: TelegramCall[]): Array<{ text: string; callback_data: string }> {
   const last = calls.filter(({ method }) => method === 'sendMessage' || method === 'editMessageText').at(-1);
   const markup = last?.payload.reply_markup as InlineKeyboardMarkup | undefined;
-  return (markup?.inline_keyboard.flat() ?? []) as { text: string; callback_data: string }[];
+  return (markup?.inline_keyboard.flat() ?? []) as Array<{ text: string; callback_data: string }>;
 }
 
 /** Which member each chat is signed in as, in memory. */
@@ -87,7 +87,7 @@ export function textMessage(chatId: number, text: string, options: { updateId?: 
       text,
       ...(command ? { entities: [{ type: 'bot_command', offset: 0, length: command.length }] } : {}),
     },
-  } as Update;
+  };
 }
 
 /** A press on a button of a message the bot sent to a private chat. */
@@ -102,7 +102,7 @@ export function buttonPress(chatId: number, data: string, options: { updateId?: 
       from: { id: chatId, is_bot: false, first_name: 'Ada' },
       message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat: { id: chatId, type: 'private', first_name: 'Ada' }, text: 'An earlier message' },
     },
-  } as Update;
+  };
 }
 
 /**

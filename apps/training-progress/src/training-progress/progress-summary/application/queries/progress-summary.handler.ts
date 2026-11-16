@@ -7,6 +7,7 @@ import { ProgressSummaryQuery } from './progress-summary.query.js';
 
 const TEN_MINUTES = 10 * 60 * 1000;
 
+/** Answers a `ProgressSummaryQuery`, through the read cache. */
 @QueryHandler(ProgressSummaryQuery)
 export class ProgressSummaryHandler implements IQueryHandler<ProgressSummaryQuery> {
   constructor(

@@ -5,11 +5,13 @@ import { GoalAllowanceReached } from './errors/goal-allowance-reached.js';
 import { GoalAllowanceExtended } from './events/goal-allowance-extended.js';
 import { GoalAllowanceRestricted } from './events/goal-allowance-restricted.js';
 
+/** The domain events a goal allowance records. */
 export type GoalAllowanceEvent = GoalAllowanceExtended | GoalAllowanceRestricted;
 
 /** Without a membership, a member holds one active training goal at a time. */
 const ACTIVE_GOALS_WITHOUT_MEMBERSHIP = 1;
 
+/** What a goal allowance holds, as the repository saves and reconstitutes it. */
 export interface GoalAllowanceProps {
   readonly memberId: MemberId;
   /** Any number of active goals, while the member has a membership in Billing. */
@@ -25,11 +27,11 @@ export interface GoalAllowanceProps {
  * that isn't newer than the stored one is ignored: Billing's events can arrive out of order.
  */
 export class GoalAllowance extends AggregateRoot<GoalAllowanceEvent> {
-  #props: GoalAllowanceProps;
+  private wrappedProps: GoalAllowanceProps;
 
   private constructor(props: GoalAllowanceProps, version: number) {
     super(version);
-    this.#props = props;
+    this.wrappedProps = props;
   }
 
   /** A member Billing never told us about: one active goal. Saved only once it changes. */
@@ -42,33 +44,33 @@ export class GoalAllowance extends AggregateRoot<GoalAllowanceEvent> {
   }
 
   get props(): GoalAllowanceProps {
-    return this.#props;
+    return this.wrappedProps;
   }
 
   /** @throws GoalAllowanceReached when one more active goal is more than the member may hold. */
   ensurePermits(activeGoals: number): void {
-    if (!this.#props.unlimited && activeGoals >= ACTIVE_GOALS_WITHOUT_MEMBERSHIP) {
-      throw new GoalAllowanceReached(this.#props.memberId.value);
+    if (!this.wrappedProps.unlimited && activeGoals >= ACTIVE_GOALS_WITHOUT_MEMBERSHIP) {
+      throw new GoalAllowanceReached(this.wrappedProps.memberId.value);
     }
   }
 
   /** The member's membership started: any number of active goals. */
   extend(sourceRevision: SourceRevision, now: Date): void {
-    this.apply(sourceRevision, true, () => new GoalAllowanceExtended(this.#props.memberId, now));
+    this.apply(sourceRevision, true, () => new GoalAllowanceExtended(this.wrappedProps.memberId, now));
   }
 
   /** The member's membership ended: one active goal again. The goals already set are kept. */
   restrict(sourceRevision: SourceRevision, now: Date): void {
-    this.apply(sourceRevision, false, () => new GoalAllowanceRestricted(this.#props.memberId, now));
+    this.apply(sourceRevision, false, () => new GoalAllowanceRestricted(this.wrappedProps.memberId, now));
   }
 
   private apply(sourceRevision: SourceRevision, unlimited: boolean, event: () => GoalAllowanceEvent): void {
-    const { sourceRevision: current } = this.#props;
+    const { sourceRevision: current } = this.wrappedProps;
     if (current && !sourceRevision.isNewerThan(current)) {
       return;
     }
-    const changed = this.#props.unlimited !== unlimited;
-    this.#props = { ...this.#props, unlimited, sourceRevision };
+    const changed = this.wrappedProps.unlimited !== unlimited;
+    this.wrappedProps = { ...this.wrappedProps, unlimited, sourceRevision };
     if (changed) {
       this.record(event());
     }

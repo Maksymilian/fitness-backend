@@ -58,7 +58,14 @@ describe('Workout Tracking: flow (e2e)', () => {
 
     await api()
       .post(`/internal/v1/equipment/${equipment.id}/recordings`)
-      .send({ recordingId: 'rec-flow-1', discipline: 'CYCLING', startedAt: '2026-10-08T08:30:00.000Z', durationSeconds: 2700, distanceMeters: 18200, calories: 530 })
+      .send({
+        recordingId: 'rec-flow-1',
+        discipline: 'CYCLING',
+        startedAt: '2026-10-08T08:30:00.000Z',
+        durationSeconds: 2700,
+        distanceMeters: 18200,
+        calories: 530,
+      })
       .expect(201);
 
     const { rows } = await client.query<{ headers: Record<string, string> }>('SELECT headers FROM nest_outbox.messages WHERE topic = $1', [

@@ -25,9 +25,10 @@ export class RateLimitGuard extends ThrottlerGuard {
     return type !== 'http' && type !== 'graphql';
   }
 
-  protected override getRequestResponse(context: ExecutionContext): { req: Record<string, any>; res: Record<string, any> } {
+  protected override getRequestResponse(context: ExecutionContext): { req: Request; res: Response } {
     if (context.getType<GqlContextType>() !== 'graphql') {
-      return super.getRequestResponse(context);
+      const http = context.switchToHttp();
+      return { req: http.getRequest<Request>(), res: http.getResponse<Response>() };
     }
     // Apollo's context only has the request; Express links it to its response.
     const { req } = GqlExecutionContext.create(context).getContext<{ req: Request }>();

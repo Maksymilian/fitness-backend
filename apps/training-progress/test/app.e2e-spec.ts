@@ -131,7 +131,7 @@ describe('Training Progress (e2e)', () => {
 
   async function graphql<T = Record<string, unknown>>(query: string, variables: Record<string, unknown> = {}) {
     const { body } = await request(app.getHttpServer()).post('/graphql').send({ query, variables }).expect(200);
-    return body as { data: T; errors?: { message: string; extensions: { code: string } }[] };
+    return body as { data: T; errors?: Array<{ message: string; extensions: { code: string } }> };
   }
 
   const TRAINING_LOG = `query ($id: ID!) { member(id: $id) { trainingLog(first: 10) { edges { node { id distanceMeters } } } } }`;
@@ -147,7 +147,9 @@ describe('Training Progress (e2e)', () => {
       expect(first.acked && again.acked).toBe(true);
       const { data } = await graphql<{ member: { trainingLog: { edges: unknown[] } } }>(TRAINING_LOG, { id: 'acl-once@example.com' });
       expect(data.member.trainingLog.edges).toEqual([{ node: { id: workout.workoutId, distanceMeters: 18200 } }]);
-      const { rows } = await client.query(`select count(*)::int as count from nest_outbox.messages where topic = 'training-progress.domain.workout-logged.v1' and key = 'acl-once@example.com'`);
+      const { rows } = await client.query(
+        `select count(*)::int as count from nest_outbox.messages where topic = 'training-progress.domain.workout-logged.v1' and key = 'acl-once@example.com'`,
+      );
       expect(rows).toEqual([{ count: 1 }]);
     });
 
@@ -158,7 +160,9 @@ describe('Training Progress (e2e)', () => {
       await deliver(WorkoutTrackingTopics.workoutCorrectedV1, { ...workout, distanceMeters: 30000, revision: 3 });
       await deliver(WorkoutTrackingTopics.workoutCorrectedV1, { ...workout, distanceMeters: 25000, revision: 2 });
 
-      const { data } = await graphql<{ member: { trainingLog: { edges: { node: { distanceMeters: number } }[] } } }>(TRAINING_LOG, { id: 'acl-revise@example.com' });
+      const { data } = await graphql<{ member: { trainingLog: { edges: Array<{ node: { distanceMeters: number } }> } } }>(TRAINING_LOG, {
+        id: 'acl-revise@example.com',
+      });
       expect(data.member.trainingLog.edges[0].node.distanceMeters).toBe(30000);
     });
 
@@ -168,7 +172,9 @@ describe('Training Progress (e2e)', () => {
       await deliver(WorkoutTrackingTopics.workoutCorrectedV1, { ...workout, distanceMeters: 21000, revision: 2 });
       await deliver(WorkoutTrackingTopics.workoutRecordedV1, workout);
 
-      const { data } = await graphql<{ member: { trainingLog: { edges: { node: { distanceMeters: number } }[] } } }>(TRAINING_LOG, { id: 'acl-order@example.com' });
+      const { data } = await graphql<{ member: { trainingLog: { edges: Array<{ node: { distanceMeters: number } }> } } }>(TRAINING_LOG, {
+        id: 'acl-order@example.com',
+      });
       expect(data.member.trainingLog.edges).toEqual([{ node: { id: workout.workoutId, distanceMeters: 21000 } }]);
     });
 
@@ -201,7 +207,7 @@ describe('Training Progress (e2e)', () => {
 
       await drainOutbox();
 
-      const { data } = await graphql<{ member: { personalRecords: { metric: string; value: number }[] } }>(PERSONAL_RECORDS, { id: 'grace@example.com' });
+      const { data } = await graphql<{ member: { personalRecords: Array<{ metric: string; value: number }> } }>(PERSONAL_RECORDS, { id: 'grace@example.com' });
       expect(data.member.personalRecords.map(({ metric, value }) => [metric, value])).toEqual([
         ['LONGEST_DISTANCE', 18200],
         ['LONGEST_DURATION', 2700],
@@ -223,7 +229,12 @@ describe('Training Progress (e2e)', () => {
       await deliver(WorkoutTrackingTopics.workoutCorrectedV1, { ...best, distanceMeters: 10000, revision: 2 });
       await drainOutbox();
 
-      const { data } = await graphql<{ member: { personalRecords: { metric: string; value: number; loggedWorkout: { id: string } }[] } }>(PERSONAL_RECORDS, { id: member });
+      const { data } = await graphql<{ member: { personalRecords: Array<{ metric: string; value: number; loggedWorkout: { id: string } }> } }>(
+        PERSONAL_RECORDS,
+        {
+          id: member,
+        },
+      );
       expect(data.member.personalRecords.find((record) => record.metric === 'LONGEST_DISTANCE')).toEqual({
         metric: 'LONGEST_DISTANCE',
         value: 20000,
@@ -243,7 +254,10 @@ describe('Training Progress (e2e)', () => {
 
     it('counts workouts already logged when a goal is set, and achieves it when progress reaches the target', async () => {
       const member = 'goals@example.com';
-      await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, distanceMeters: 120000, startedAt: new Date(daysFromNow(-20).getTime() + 8 * 60 * 60 * 1000).toISOString() }));
+      await deliver(
+        WorkoutTrackingTopics.workoutRecordedV1,
+        snapshot({ memberId: member, distanceMeters: 120000, startedAt: new Date(daysFromNow(-20).getTime() + 8 * 60 * 60 * 1000).toISOString() }),
+      );
       await drainOutbox();
 
       const set = await graphql<{ setTrainingGoal: { id: string; status: string; progress: number } }>(SET_GOAL, {
@@ -251,10 +265,13 @@ describe('Training Progress (e2e)', () => {
       });
       expect(set.data.setTrainingGoal).toMatchObject({ status: 'ACTIVE', progress: 120000 });
 
-      await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, distanceMeters: 90000, startedAt: new Date(daysFromNow(-10).getTime() + 8 * 60 * 60 * 1000).toISOString() }));
+      await deliver(
+        WorkoutTrackingTopics.workoutRecordedV1,
+        snapshot({ memberId: member, distanceMeters: 90000, startedAt: new Date(daysFromNow(-10).getTime() + 8 * 60 * 60 * 1000).toISOString() }),
+      );
       await drainOutbox();
 
-      const { data } = await graphql<{ member: { trainingGoals: { status: string; progress: number }[] } }>(GOALS, { id: member });
+      const { data } = await graphql<{ member: { trainingGoals: Array<{ status: string; progress: number }> } }>(GOALS, { id: member });
       expect(data.member.trainingGoals).toEqual([expect.objectContaining({ status: 'ACHIEVED', progress: 210000 })]);
       mailbox.assertSent({ to: member, mail: GoalAchievedMail });
     });
@@ -268,10 +285,10 @@ describe('Training Progress (e2e)', () => {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const inAnHour = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-      const sinceWeekAgo = await graphql<{ member: { trainingGoals: { id: string }[] } }>(GOALS_SET_SINCE, { id: member, setSince: weekAgo });
+      const sinceWeekAgo = await graphql<{ member: { trainingGoals: Array<{ id: string }> } }>(GOALS_SET_SINCE, { id: member, setSince: weekAgo });
       expect(sinceWeekAgo.data.member.trainingGoals).toEqual([{ id: set.data.setTrainingGoal.id }]);
 
-      const sinceInAnHour = await graphql<{ member: { trainingGoals: { id: string }[] } }>(GOALS_SET_SINCE, { id: member, setSince: inAnHour });
+      const sinceInAnHour = await graphql<{ member: { trainingGoals: Array<{ id: string }> } }>(GOALS_SET_SINCE, { id: member, setSince: inAnHour });
       expect(sinceInAnHour.data.member.trainingGoals).toEqual([]);
     });
 
@@ -315,11 +332,11 @@ describe('Training Progress (e2e)', () => {
       expect(await missEndedGoals(new Date(endsOn + DAY).toISOString())).toBeGreaterThanOrEqual(1); // the grace period ends at endsOn + 1 day
       expect(await missEndedGoals(new Date(endsOn + DAY).toISOString())).toBe(0); // a second trigger changes nothing
 
-      const { data } = await graphql<{ member: { trainingGoals: { status: string }[] } }>(GOALS, { id: 'miss@example.com' });
+      const { data } = await graphql<{ member: { trainingGoals: Array<{ status: string }> } }>(GOALS, { id: 'miss@example.com' });
       expect(data.member.trainingGoals).toEqual([expect.objectContaining({ status: 'MISSED' })]);
     });
 
-    it("routes the schedule trigger, a structured-mode CloudEvent, to Miss Ended Goals, and acks it", async () => {
+    it('routes the schedule trigger, a structured-mode CloudEvent, to Miss Ended Goals, and acks it', async () => {
       const channel = { ack: vi.fn(), nack: vi.fn() };
       const message = { content: Buffer.from('') };
       const trigger = { specversion: '1.0', id: uuidv7(), source: '/scheduler', type: ScheduleTriggers.types.missEndedGoalsV1, time: new Date().toISOString() };
@@ -340,13 +357,19 @@ describe('Training Progress (e2e)', () => {
       await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, startedAt: '2026-10-06T08:00:00.000Z' }));
       await drainOutbox();
 
-      const first = await graphql<{ member: { progressSummary: { workoutCount: number; periodStart: string } } }>(SUMMARY, { id: member, date: '2026-10-08T12:00:00Z' });
+      const first = await graphql<{ member: { progressSummary: { workoutCount: number; periodStart: string } } }>(SUMMARY, {
+        id: member,
+        date: '2026-10-08T12:00:00Z',
+      });
       expect(first.data.member.progressSummary).toMatchObject({ periodStart: '2026-10-05T00:00:00.000Z', workoutCount: 1 });
 
       await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, startedAt: '2026-10-07T08:00:00.000Z' }));
       await drainOutbox(); // the cache invalidation handler deletes the week's keys
 
-      const second = await graphql<{ member: { progressSummary: { workoutCount: number; totalDistanceMeters: number } } }>(SUMMARY, { id: member, date: '2026-10-08T12:00:00Z' });
+      const second = await graphql<{ member: { progressSummary: { workoutCount: number; totalDistanceMeters: number } } }>(SUMMARY, {
+        id: member,
+        date: '2026-10-08T12:00:00Z',
+      });
       expect(second.data.member.progressSummary).toMatchObject({ workoutCount: 2, totalDistanceMeters: 36400 });
     });
 
@@ -357,14 +380,26 @@ describe('Training Progress (e2e)', () => {
         await deliver(WorkoutTrackingTopics.workoutRecordedV1, snapshot({ memberId: member, startedAt: day(daysAgo) }));
       }
 
-      const { data } = await graphql<{ member: { streak: number } }>(`query ($id: ID!) { member(id: $id) { streak } }`, { id: member });
+      const { data } = await graphql<{ member: { streak: number } }>(
+        `
+          query ($id: ID!) {
+            member(id: $id) {
+              streak
+            }
+          }
+        `,
+        { id: member },
+      );
       expect(data.member.streak).toBe(3);
     });
 
     it('answers from PostgreSQL when the cache fails', async () => {
       vi.spyOn(cache, 'get').mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
-      const { data, errors } = await graphql<{ member: { progressSummary: { workoutCount: number } } }>(SUMMARY, { id: 'summary@example.com', date: '2026-10-08T12:00:00Z' });
+      const { data, errors } = await graphql<{ member: { progressSummary: { workoutCount: number } } }>(SUMMARY, {
+        id: 'summary@example.com',
+        date: '2026-10-08T12:00:00Z',
+      });
 
       expect(errors).toBeUndefined();
       expect(data.member.progressSummary.workoutCount).toBe(2);
@@ -380,7 +415,13 @@ describe('Training Progress (e2e)', () => {
     });
 
     it('validates the member id as an email address', async () => {
-      const { errors } = await graphql(`query { member(id: "not-an-email") { id } }`);
+      const { errors } = await graphql(`
+        query {
+          member(id: "not-an-email") {
+            id
+          }
+        }
+      `);
 
       expect(errors?.[0].extensions.code).toBe('BAD_REQUEST');
     });

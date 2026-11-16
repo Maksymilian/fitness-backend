@@ -86,7 +86,7 @@ describe('TelegramBot', () => {
 
   it('answers a button press once its work is done, and shows a domain error as an alert', async () => {
     await chats.signIn(7, 'ada@example.com');
-    const pressed: [string, string][] = [];
+    const pressed: Array<[string, string]> = [];
     telegramBot.button('abandon', async (_ctx, data, memberId) => {
       pressed.push([data, memberId]);
       if (data === 'achieved-goal') {

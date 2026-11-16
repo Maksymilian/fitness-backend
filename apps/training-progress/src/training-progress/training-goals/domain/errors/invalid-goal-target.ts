@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a goal target isn't a positive whole number. */
 export class InvalidGoalTarget extends DomainError {
   readonly kind = 'invariant-violation';
 

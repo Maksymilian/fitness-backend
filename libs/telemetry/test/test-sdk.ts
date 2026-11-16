@@ -20,7 +20,9 @@ export function startTestSdk() {
   context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
   propagation.setGlobalPropagator(new CompositePropagator({ propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()] }));
   trace.setGlobalTracerProvider(new BasicTracerProvider({ spanProcessors: [new BaggageSpanProcessor(isCarried), new SimpleSpanProcessor(spans)] }));
-  logs.setGlobalLoggerProvider(new LoggerProvider({ processors: [new BaggageLogRecordProcessor(isCarried), new SimpleLogRecordProcessor({ exporter: records })] }));
+  logs.setGlobalLoggerProvider(
+    new LoggerProvider({ processors: [new BaggageLogRecordProcessor(isCarried), new SimpleLogRecordProcessor({ exporter: records })] }),
+  );
   return {
     spans,
     records,

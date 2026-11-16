@@ -13,6 +13,7 @@ export interface TrainingGoalRepresentation {
   achievedAt: Date | null;
 }
 
+/** Turns a training goal into the representation the interfaces return. */
 export function representTrainingGoal(goal: TrainingGoal): TrainingGoalRepresentation {
   const p = goal.props;
   return {

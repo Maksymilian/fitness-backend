@@ -1,6 +1,7 @@
 import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 import { DisciplineEnum } from './discipline.enum.js';
 
+/** A logged workout in the GraphQL schema. */
 @ObjectType('LoggedWorkout')
 export class LoggedWorkoutType {
   @Field(() => ID)

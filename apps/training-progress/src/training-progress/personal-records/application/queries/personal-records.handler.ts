@@ -15,9 +15,7 @@ export class PersonalRecordsHandler implements IQueryHandler<PersonalRecordsQuer
   ) {}
 
   async execute({ memberId, discipline }: PersonalRecordsQuery) {
-    const records = await this.cache.getOrLoad(CacheKeys.personalRecords(memberId.value), TEN_MINUTES, () =>
-      this.queries.ofMember(memberId.value),
-    );
+    const records = await this.cache.getOrLoad(CacheKeys.personalRecords(memberId.value), TEN_MINUTES, () => this.queries.ofMember(memberId.value));
     // Cached as JSON: dates come back as strings.
     return records
       .filter((record) => !discipline || record.discipline === discipline.value)

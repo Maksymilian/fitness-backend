@@ -36,7 +36,14 @@ describe('TrainingGoalsBotCommands', () => {
     execute: vi.fn(async (command: unknown) => {
       commands.push(command);
       if (command instanceof SetTrainingGoalCommand) {
-        return { ...goal, metric: command.metric.value, target: command.target.value, discipline: command.discipline?.value ?? null, startsOn: command.startsOn, endsOn: command.endsOn };
+        return {
+          ...goal,
+          metric: command.metric.value,
+          target: command.target.value,
+          discipline: command.discipline?.value ?? null,
+          startsOn: command.startsOn,
+          endsOn: command.endsOn,
+        };
       }
       return { ...goal, status: 'ABANDONED' };
     }),
@@ -74,7 +81,7 @@ describe('TrainingGoalsBotCommands', () => {
   });
 
   it('sets a goal once the wizard has every choice, with buttons that fit in 64 bytes', async () => {
-    const press = async (label: string, from: { text: string; callback_data: string }[]) => {
+    const press = async (label: string, from: Array<{ text: string; callback_data: string }>) => {
       const button = from.find(({ text }) => text.startsWith(label));
       expect(button, `a "${label}" button among ${from.map(({ text }) => text).join(', ')}`).toBeDefined();
       return bot.send(buttonPress(7, button!.callback_data));

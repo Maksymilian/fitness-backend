@@ -120,6 +120,7 @@ export class Environment {
   TELEGRAM_WEBHOOK_SECRET?: string;
 }
 
+/** Validates the environment at startup (`ConfigModule`'s `validate`), and fails fast with every problem listed. */
 export function validateEnvironment(config: Record<string, unknown>): Environment {
   const environment = plainToInstance(Environment, config, { enableImplicitConversion: true });
   const errors = validateSync(environment, { skipMissingProperties: false });

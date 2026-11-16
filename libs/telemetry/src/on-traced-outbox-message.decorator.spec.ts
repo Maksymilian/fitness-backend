@@ -6,7 +6,7 @@ import { OnTracedOutboxMessage } from './on-traced-outbox-message.decorator.js';
 import { traceHeaders } from './staged-trace.js';
 
 class LoggedWorkoutHandler {
-  readonly handled: { payload: unknown; flowId?: string; self: unknown }[] = [];
+  readonly handled: Array<{ payload: unknown; flowId?: string; self: unknown }> = [];
 
   @OnTracedOutboxMessage('training-progress.domain.workout-logged.v1', { consumer: 'test' })
   async handle(payload: unknown) {

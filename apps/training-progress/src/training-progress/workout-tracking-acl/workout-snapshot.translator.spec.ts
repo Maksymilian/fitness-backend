@@ -2,19 +2,20 @@ import type { CloudEventV1 } from 'cloudevents';
 import { InvalidIntegrationEvent } from './invalid-integration-event.js';
 import { WorkoutSnapshotTranslator } from './workout-snapshot.translator.js';
 
-const cloudEvent = (data: Record<string, unknown>, attributes: Record<string, unknown> = {}) =>
-  ({
+function cloudEvent(data: Record<string, unknown>, attributes: Record<string, unknown> = {}): CloudEventV1<unknown> {
+  return {
     specversion: '1.0',
     id: '01a0f335-aae8-7027-b795-ca9dab21e44d',
     source: '/workout-tracking',
     type: 'workout-tracking.integration.workout-recorded.v1',
-    subject: data.workoutId,
+    subject: typeof data.workoutId === 'string' ? data.workoutId : undefined,
     time: '2026-10-08T09:30:12.000Z',
     datacontenttype: 'application/json',
     partitionkey: 'ada@example.com',
     data,
     ...attributes,
-  }) as CloudEventV1<unknown>;
+  };
+}
 
 const snapshot = {
   workoutId: '0199c3a2-0000-7000-8000-000000000101',

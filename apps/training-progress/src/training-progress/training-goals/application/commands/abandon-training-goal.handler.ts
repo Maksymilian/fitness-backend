@@ -5,6 +5,7 @@ import { TrainingGoalRepository } from '../../domain/training-goal.repository.js
 import { representTrainingGoal } from '../training-goal.representation.interface.js';
 import { AbandonTrainingGoalCommand } from './abandon-training-goal.command.js';
 
+/** Abandons a training goal: loads it, calls `abandon`, saves it and stages its events in one transaction. */
 @CommandHandler(AbandonTrainingGoalCommand)
 export class AbandonTrainingGoalHandler implements ICommandHandler<AbandonTrainingGoalCommand> {
   constructor(

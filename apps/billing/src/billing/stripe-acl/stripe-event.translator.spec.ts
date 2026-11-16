@@ -13,29 +13,34 @@ const prices = { planOf: async (price: string | { lookup_key: string | null }) =
 const customers = { memberOf: async (customer: string) => (customer === 'cus_ada' ? 'ada@example.com' : undefined) };
 const translator = new StripeEventTranslator(prices as unknown as PriceCatalog, customers as unknown as ProviderCustomers);
 
-const event = (type: string, object: unknown, previous?: unknown) =>
-  ({ id: 'evt_1', type, created: 1_793_000_000, data: { object, ...(previous ? { previous_attributes: previous } : {}) } }) as unknown as Stripe.Event;
+function event(type: string, object: unknown, previous?: unknown) {
+  return { id: 'evt_1', type, created: 1_793_000_000, data: { object, ...(previous ? { previous_attributes: previous } : {}) } } as unknown as Stripe.Event;
+}
 
-const invoice = (overrides: Record<string, unknown> = {}) => ({
-  id: 'in_1',
-  customer: 'cus_ada',
-  amount_paid: 999,
-  currency: 'eur',
-  created: 1_793_000_000,
-  status_transitions: { paid_at: 1_793_000_100 },
-  parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_1', metadata } },
-  lines: { data: [{ period: { start: 1_793_000_000, end: 1_795_600_000 }, pricing: { price_details: { price: 'price_monthly' } } }] },
-  ...overrides,
-});
+function invoice(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'in_1',
+    customer: 'cus_ada',
+    amount_paid: 999,
+    currency: 'eur',
+    created: 1_793_000_000,
+    status_transitions: { paid_at: 1_793_000_100 },
+    parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_1', metadata } },
+    lines: { data: [{ period: { start: 1_793_000_000, end: 1_795_600_000 }, pricing: { price_details: { price: 'price_monthly' } } }] },
+    ...overrides,
+  };
+}
 
-const subscription = (overrides: Record<string, unknown> = {}) => ({
-  id: 'sub_1',
-  metadata,
-  cancel_at_period_end: false,
-  cancel_at: null,
-  items: { data: [{ price: { id: 'price_monthly', lookup_key: 'membership-monthly' } }] },
-  ...overrides,
-});
+function subscription(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sub_1',
+    metadata,
+    cancel_at_period_end: false,
+    cancel_at: null,
+    items: { data: [{ price: { id: 'price_monthly', lookup_key: 'membership-monthly' } }] },
+    ...overrides,
+  };
+}
 
 describe('StripeEventTranslator', () => {
   it("translates invoice.paid into Record Payment: the amount in exact money, paid through the lines' end", async () => {
@@ -78,14 +83,16 @@ describe('StripeEventTranslator', () => {
     expect(command.providerReference.value).toBe('ch_1:799');
   });
 
-  it("ignores a refund of a customer whose payments Billing never recorded", async () => {
+  it('ignores a refund of a customer whose payments Billing never recorded', async () => {
     const charge = { id: 'ch_2', customer: 'cus_other', currency: 'eur', amount_refunded: 100 };
 
     expect((await translator.translate(event('charge.refunded', charge))).commands).toEqual([]);
   });
 
   it('translates renewal turned off and on into Cancel and Resume', async () => {
-    const cancelled = await translator.translate(event('customer.subscription.updated', subscription({ cancel_at_period_end: true }), { cancel_at_period_end: false }));
+    const cancelled = await translator.translate(
+      event('customer.subscription.updated', subscription({ cancel_at_period_end: true }), { cancel_at_period_end: false }),
+    );
     const resumed = await translator.translate(event('customer.subscription.updated', subscription(), { cancel_at_period_end: true }));
 
     expect((cancelled.commands[0] as ChangeMembershipCommand).change).toEqual({ kind: 'cancel' });

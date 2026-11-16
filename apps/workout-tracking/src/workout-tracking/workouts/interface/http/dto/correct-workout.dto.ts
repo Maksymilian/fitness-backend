@@ -1,5 +1,6 @@
 import { IsInt, IsString, Length } from 'class-validator';
 
+/** The body of a correction: the corrected metrics and the reason. */
 export class CorrectWorkoutDto {
   @IsInt()
   durationSeconds: number;

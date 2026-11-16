@@ -1,6 +1,7 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 import { LoggedWorkoutType } from './logged-workout.type.js';
 
+/** Where a page of the training log ends, and whether another page follows (Relay connections). */
 @ObjectType('PageInfo')
 export class PageInfoType {
   @Field()
@@ -10,6 +11,7 @@ export class PageInfoType {
   endCursor: string | null;
 }
 
+/** A logged workout in a page of the training log, with the cursor that points at it. */
 @ObjectType('LoggedWorkoutEdge')
 export class LoggedWorkoutEdgeType {
   @Field()
@@ -19,6 +21,7 @@ export class LoggedWorkoutEdgeType {
   node: LoggedWorkoutType;
 }
 
+/** A page of a member's training log (a Relay connection). */
 @ObjectType('LoggedWorkoutConnection')
 export class LoggedWorkoutConnectionType {
   @Field(() => [LoggedWorkoutEdgeType])

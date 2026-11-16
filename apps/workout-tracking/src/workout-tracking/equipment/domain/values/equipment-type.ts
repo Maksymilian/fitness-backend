@@ -1,6 +1,7 @@
 import { Discipline } from '../../../workouts/domain/values/discipline.js';
 import { UnknownEquipmentType } from '../errors/unknown-equipment-type.js';
 
+/** How an equipment type is stored and published. */
 export type EquipmentTypeName = 'BIKE' | 'TREADMILL' | 'ROWER';
 
 /** What kind of machine equipment is. It decides which disciplines the equipment can record. */

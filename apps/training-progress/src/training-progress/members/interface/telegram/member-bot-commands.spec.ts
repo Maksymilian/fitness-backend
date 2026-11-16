@@ -36,7 +36,9 @@ describe('MemberBotCommands', () => {
       }
       if (query instanceof TrainingLogQuery) {
         const cursor = `${ride.startedAt.toISOString()}_${ride.id}`;
-        return query.after ? { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } : { edges: [{ cursor, node: ride }], pageInfo: { hasNextPage: true, endCursor: cursor } };
+        return query.after
+          ? { edges: [], pageInfo: { hasNextPage: false, endCursor: null } }
+          : { edges: [{ cursor, node: ride }], pageInfo: { hasNextPage: true, endCursor: cursor } };
       }
       if (query instanceof PersonalRecordsQuery) {
         return [
@@ -73,7 +75,11 @@ describe('MemberBotCommands', () => {
 
     expect(switched.map(({ method }) => method)).toEqual(['editMessageText', 'answerCallbackQuery']);
     expect(queries.at(-1)).toMatchObject({ kind: 'MONTH', discipline: { value: 'CYCLING' } });
-    expect(buttons(switched).filter(({ text }) => text.startsWith('•')).map(({ text }) => text)).toEqual(['• Month', '• Cycling']);
+    expect(
+      buttons(switched)
+        .filter(({ text }) => text.startsWith('•'))
+        .map(({ text }) => text),
+    ).toEqual(['• Month', '• Cycling']);
   });
 
   it('replies to /training_log with the latest workouts, and the older ones on request', async () => {

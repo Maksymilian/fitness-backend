@@ -67,7 +67,7 @@ describe('RateLimitGuard', () => {
 
   async function rejectedRequests() {
     const { resourceMetrics } = await reader.collect();
-    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as DataPoint<number>[]);
+    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as Array<DataPoint<number>>);
   }
 
   it('rejects a GraphQL request past the limit, and counts it by resolver', async () => {

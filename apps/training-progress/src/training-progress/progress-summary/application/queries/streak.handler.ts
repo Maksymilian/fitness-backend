@@ -5,6 +5,7 @@ import { utcDay } from '../../../calendar/domain/values/training-period.js';
 import { ProgressSummaries } from './progress-summaries.js';
 import { StreakQuery } from './streak.query.js';
 
+/** Answers a `StreakQuery`, through the read cache. */
 @QueryHandler(StreakQuery)
 export class StreakHandler implements IQueryHandler<StreakQuery> {
   constructor(
@@ -16,9 +17,7 @@ export class StreakHandler implements IQueryHandler<StreakQuery> {
     const day = utcDay(today);
     // Cached until the end of the UTC day: tomorrow the streak may break without any new workout.
     const untilEndOfDay = day.getTime() + 86_400_000 - today.getTime();
-    return this.cache.getOrLoad(CacheKeys.streak(memberId.value), untilEndOfDay, async () =>
-      streak(await this.summaries.activeDays(memberId.value), day),
-    );
+    return this.cache.getOrLoad(CacheKeys.streak(memberId.value), untilEndOfDay, async () => streak(await this.summaries.activeDays(memberId.value), day));
   }
 }
 

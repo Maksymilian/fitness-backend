@@ -7,6 +7,7 @@ import type { TrainingPeriod } from '../../calendar/domain/values/training-perio
 import { ProgressSummaries } from '../application/queries/progress-summaries.js';
 import type { ProgressSummaryRepresentation } from '../application/progress-summary.representation.interface.js';
 
+/** Sums the training log into progress summaries and active days with SQL. */
 @Injectable()
 export class DrizzleProgressSummaries extends ProgressSummaries {
   constructor(@InjectDrizzle() private readonly db: Database) {

@@ -17,6 +17,7 @@ import { TelegramWebhookController } from './telegram-webhook.controller.js';
       inject: [ConfigService],
       useFactory: (config: ConfigService<Environment, true>) => ({
         receivers: {
+          // Imported only with TELEGRAM_UPDATES=webhook, where validateEnvironment() requires the secret.
           telegram: { scheme: new TelegramSecretTokenScheme(), secret: config.get('TELEGRAM_WEBHOOK_SECRET', { infer: true })! },
         },
       }),

@@ -10,6 +10,7 @@ export interface EquipmentRepresentation {
   registeredAt: string;
 }
 
+/** Turns equipment into the representation the REST API returns. */
 export function representEquipment(equipment: Equipment): EquipmentRepresentation {
   const { id, serialNumber, type, pairedMemberId, pairedAt, registeredAt } = equipment.props;
   return {

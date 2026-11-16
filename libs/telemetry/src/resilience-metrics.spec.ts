@@ -19,7 +19,7 @@ describe('countResilienceEvents', () => {
 
   async function counted() {
     const { resourceMetrics } = await reader.collect();
-    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as DataPoint<number>[]);
+    return resourceMetrics.scopeMetrics.flatMap((scope) => scope.metrics).flatMap((metric) => metric.dataPoints as Array<DataPoint<number>>);
   }
 
   it('counts each event from the diagnostics channels by type, name and source', async () => {

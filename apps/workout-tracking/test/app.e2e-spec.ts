@@ -76,10 +76,7 @@ describe('Workout Tracking (e2e)', () => {
     it('registers, pairs and unpairs equipment', async () => {
       const equipmentId = await registerBike('bk-e2e-1');
 
-      const paired = await api()
-        .put(`/internal/v1/equipment/${equipmentId}/pairing`)
-        .send({ memberId: 'Ada@Example.com' })
-        .expect(200);
+      const paired = await api().put(`/internal/v1/equipment/${equipmentId}/pairing`).send({ memberId: 'Ada@Example.com' }).expect(200);
       expect(paired.body).toMatchObject({ serialNumber: 'BK-E2E-1', type: 'BIKE', pairedMemberId: 'ada@example.com' });
 
       await api().delete(`/internal/v1/equipment/${equipmentId}/pairing`).expect(204);
@@ -126,10 +123,7 @@ describe('Workout Tracking (e2e)', () => {
     it('records a workout and publishes workout-recorded.v1, as a CloudEvent, only after the commit', async () => {
       const equipmentId = await pairedBike('BK-E2E-10');
 
-      const { body: workout } = await api()
-        .post(`/internal/v1/equipment/${equipmentId}/recordings`)
-        .send(ride('rec-1'))
-        .expect(201);
+      const { body: workout } = await api().post(`/internal/v1/equipment/${equipmentId}/recordings`).send(ride('rec-1')).expect(201);
       expect(workout).toMatchObject({ memberId: 'ada@example.com', status: 'RECORDED', revision: 1, equipmentType: 'BIKE' });
       expect(broker.emit).not.toHaveBeenCalled();
 
@@ -237,9 +231,7 @@ describe('Workout Tracking (e2e)', () => {
 
       expect(body).toMatchObject({ distanceMeters: 21000, revision: 2 });
       const audit = await client.query(`select revision, reason, previous_metrics from workout_corrections where workout_id = $1`, [workoutId]);
-      expect(audit.rows).toEqual([
-        { revision: 2, reason: 'GPS drift', previous_metrics: { durationSeconds: 2700, distanceMeters: 18200, calories: 530 } },
-      ]);
+      expect(audit.rows).toEqual([{ revision: 2, reason: 'GPS drift', previous_metrics: { durationSeconds: 2700, distanceMeters: 18200, calories: 530 } }]);
       await relay.runOnce();
       expect(broker.emit).toHaveBeenCalledWith(
         WorkoutTrackingTopics.workoutCorrectedV1,

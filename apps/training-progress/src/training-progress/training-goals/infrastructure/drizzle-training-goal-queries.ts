@@ -6,6 +6,7 @@ import { trainingGoals } from '../../../platform/database/schema.js';
 import { TrainingGoalQueries } from '../application/queries/training-goal-queries.js';
 import type { TrainingGoalRepresentation } from '../application/training-goal.representation.interface.js';
 
+/** Reads training goals with SQL, bypassing the domain model. */
 @Injectable()
 export class DrizzleTrainingGoalQueries extends TrainingGoalQueries {
   constructor(@InjectDrizzle() private readonly db: Database) {

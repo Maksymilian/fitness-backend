@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import { IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 
+/** The query string of a member's workout list: page size and cursor. */
 export class ListMemberWorkoutsDto {
   @IsOptional()
   @Type(() => Number)

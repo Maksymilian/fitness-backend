@@ -1,5 +1,6 @@
 import { DomainError } from '@app/ddd';
 
+/** Thrown when a serial number is empty or malformed. */
 export class InvalidSerialNumber extends DomainError {
   readonly kind = 'invariant-violation';
 

@@ -1,5 +1,6 @@
 import { IsDateString, IsIn, IsInt, IsString, Length } from 'class-validator';
 
+/** The body of a recording the equipment sends after a workout. */
 export class RecordWorkoutDto {
   /** The equipment's own id for this recording. Submitting it again returns the existing workout. */
   @IsString()

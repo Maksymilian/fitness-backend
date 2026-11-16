@@ -11,14 +11,16 @@ const snapshot = {
   renews: true,
   revision: 3,
 };
-const cloudEvent = (type: string, data: unknown, source = BILLING_SOURCE) => ({
-  specversion: '1.0',
-  id: '0199c3a2-0000-7000-8000-0000000003ff',
-  source,
-  type,
-  datacontenttype: 'application/json',
-  data,
-});
+function cloudEvent(type: string, data: unknown, source = BILLING_SOURCE) {
+  return {
+    specversion: '1.0',
+    id: '0199c3a2-0000-7000-8000-0000000003ff',
+    source,
+    type,
+    datacontenttype: 'application/json',
+    data,
+  };
+}
 
 describe('MembershipSnapshotTranslator', () => {
   const translator = new MembershipSnapshotTranslator();

@@ -13,6 +13,7 @@ import { AbandonTrainingGoalInput } from './abandon-training-goal.input.js';
 import { SetTrainingGoalInput } from './set-training-goal.input.js';
 import { TrainingGoalType } from './training-goal.type.js';
 
+/** GraphQL queries and mutations for training goals. */
 @Resolver(() => TrainingGoalType)
 export class TrainingGoalsResolver {
   constructor(

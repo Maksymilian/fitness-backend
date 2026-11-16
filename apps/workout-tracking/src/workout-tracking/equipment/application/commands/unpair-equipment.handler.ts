@@ -4,6 +4,7 @@ import { DomainEventPublisher } from '../../../../platform/outbox/domain-event-p
 import { EquipmentRepository } from '../../domain/equipment.repository.js';
 import { UnpairEquipmentCommand } from './unpair-equipment.command.js';
 
+/** Unpairs equipment: loads it, calls `unpair`, saves it and stages its events in one transaction. */
 @CommandHandler(UnpairEquipmentCommand)
 export class UnpairEquipmentHandler implements ICommandHandler<UnpairEquipmentCommand> {
   constructor(

@@ -7,6 +7,7 @@ import { ChangeGoalAllowanceCommand } from './change-goal-allowance.command.js';
 /** The inbox of the anticorruption layer towards Billing. */
 export const BILLING_ACL_CONSUMER = 'training-progress.billing';
 
+/** Extends or restricts a member's goal allowance, once per Billing event (inbox), in one transaction. */
 @CommandHandler(ChangeGoalAllowanceCommand)
 export class ChangeGoalAllowanceHandler implements ICommandHandler<ChangeGoalAllowanceCommand> {
   constructor(

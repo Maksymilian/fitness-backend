@@ -5,6 +5,7 @@ import { WorkoutRepository } from '../../domain/workout.repository.js';
 import { representWorkout } from '../workout.representation.interface.js';
 import { CorrectWorkoutCommand } from './correct-workout.command.js';
 
+/** Corrects a workout: loads it, calls `correct`, saves it and stages its events in one transaction. */
 @CommandHandler(CorrectWorkoutCommand)
 export class CorrectWorkoutHandler implements ICommandHandler<CorrectWorkoutCommand> {
   constructor(

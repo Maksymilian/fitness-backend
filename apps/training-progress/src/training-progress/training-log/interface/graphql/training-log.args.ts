@@ -3,6 +3,7 @@ import { Transform } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
 import { DisciplineEnum } from './discipline.enum.js';
 
+/** The arguments of a member's `trainingLog` field: page size, cursor and an optional discipline. */
 @ArgsType()
 export class TrainingLogArgs {
   @Field(() => Int, { defaultValue: 20 })

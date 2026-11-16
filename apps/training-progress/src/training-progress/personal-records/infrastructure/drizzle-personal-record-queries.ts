@@ -6,6 +6,7 @@ import { loggedWorkouts, personalRecords } from '../../../platform/database/sche
 import { PersonalRecordQueries } from '../application/queries/personal-record-queries.js';
 import type { PersonalRecordRepresentation } from '../application/personal-record.representation.interface.js';
 
+/** Reads personal records with SQL, bypassing the domain model. */
 @Injectable()
 export class DrizzlePersonalRecordQueries extends PersonalRecordQueries {
   constructor(@InjectDrizzle() private readonly db: Database) {
