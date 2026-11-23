@@ -169,6 +169,159 @@
           ]
         },
         {
+          "uid": "rabbitmq-ready-without-consumer",
+          "title": "RabbitMQ ready messages without a consumer",
+          "condition": "C",
+          "for": "1m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical",
+            "team": "fitness-platform"
+          },
+          "annotations": {
+            "summary": "Queue {{ $labels.queue }}: ready messages and no consumer",
+            "description": "{{ $values.A.Value | printf \"%.0f\" }} messages are ready and the queue has had no consumer for 1 minute: the consuming service is down or disconnected."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(rabbitmq_detailed_queue_messages_ready > 0)\n  and on (queue, vhost)\n  (rabbitmq_detailed_queue_consumers == 0)",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "rabbitmq-queue-sustained-growth",
+          "title": "RabbitMQ queue in sustained growth",
+          "condition": "C",
+          "for": "5m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning",
+            "team": "fitness-platform"
+          },
+          "annotations": {
+            "summary": "Queue {{ $labels.queue }}: ready messages keep growing",
+            "description": "{{ $values.A.Value | printf \"%.0f\" }} messages are ready and the count has kept growing for 5 minutes: consumers are slower than publishers."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(rabbitmq_detailed_queue_messages_ready > 50)\n  and on (queue, vhost)\n  (deriv(rabbitmq_detailed_queue_messages_ready[5m]) > 0)",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "rabbitmq-dead-letters",
+          "title": "RabbitMQ dead letters",
+          "condition": "C",
+          "for": "0s",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical",
+            "team": "fitness-platform"
+          },
+          "annotations": {
+            "summary": "Dead-letter queue {{ $labels.queue }} holds messages",
+            "description": "{{ $values.A.Value | printf \"%.0f\" }} messages are in the dead-letter queue: they failed for good and need investigating."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "rabbitmq_detailed_queue_messages_ready{queue=~\".*\\\\.dlq\"}",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
           "uid": "rabbitmq-queue-not-empty",
           "title": "RabbitMQ queue not empty for 5 minutes",
           "condition": "C",
